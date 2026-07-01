@@ -128,6 +128,20 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .press-chip-select option { color: #1a1a1a; text-transform: none; letter-spacing: normal; }
 .press-chip-x-btn { background: transparent; border: none; color: var(--masters-gold-bright); font-weight: 700; font-size: 14px; line-height: 1; cursor: pointer; padding: 4px 8px; min-height: 32px; min-width: 32px; touch-action: manipulation; }
 .press-chip-x-btn:hover, .press-chip-x-btn:active { color: var(--masters-cream); }
+/* Read-only Nine & Round totals card — gold header to set it apart from the green hole cards */
+.totals-card-header { background: linear-gradient(90deg, var(--masters-gold) 0%, var(--masters-gold-bright) 100%); color: var(--masters-green-deep); padding: 12px 18px; display: flex; justify-content: space-between; align-items: center; cursor: default; }
+.totals-card-header h4 { font-family: 'Playfair Display', serif; font-style: italic; font-size: 18px; font-weight: 600; color: var(--masters-green-deep); }
+.totals-card-header .meta { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--masters-green-dark); }
+.totals-table { width: 100%; border-collapse: collapse; }
+.totals-table th, .totals-table td { padding: 9px 8px; text-align: center; border-bottom: 1px solid var(--rule); font-family: 'Playfair Display', serif; font-size: 18px; color: var(--masters-green-dark); }
+.totals-table tr:last-child td { border-bottom: none; }
+.totals-table thead th { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #999; font-weight: 500; }
+.totals-table .seg { text-align: left; font-style: italic; }
+.totals-table td.seg { color: var(--masters-green-dark); }
+.totals-table td.win { font-weight: 700; background: rgba(201,169,97,0.18); }
+.totals-table td.partial { color: #b0a98f; }
+.totals-table .skins, .totals-table th.skins { text-align: right; font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.06em; color: var(--masters-gold); white-space: nowrap; }
+.totals-table td.skins.awarded { color: var(--masters-green-dark); font-weight: 600; }
 .rule-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
 .rule-item { background: var(--masters-ivory); padding: 18px; border-left: 3px solid var(--masters-gold); }
 .rule-item h4 { font-family: 'Playfair Display', serif; font-style: italic; font-weight: 600; color: var(--masters-green-dark); margin-bottom: 8px; font-size: 18px; }
@@ -1059,6 +1073,7 @@ function renderActiveRound() {
   const container = $('#holesContainer');
   container.innerHTML = '';
   for (let i = 0; i < 18; i++) container.appendChild(renderHoleCard(i, r, course, comp));
+  container.appendChild(renderTotalsCard(r, course, comp));
   $('#roundLiveStandings').innerHTML = r.players.map(pid => {
     const p = STATE.players.find(pl=>pl.id===pid);
     const todayHcp = r.handicapsForRound ? r.handicapsForRound[pid] : (p ? p.hcp : null);
@@ -1130,6 +1145,55 @@ function renderHoleCard(i, round, course, comp) {
       + '<div class="score-row-net">' + (net !== '' ? net : '—') + '</div></div>';
   }).join('');
   div.innerHTML = '<div class="hole-card-header" onclick="toggleHole(' + i + ')"><h4>Hole ' + (i+1) + ' <span style="font-size:14px; color:rgba(245,239,224,.7); margin-left:8px;">Par ' + par + '</span></h4><div class="meta">HCP ' + hi + ' · ' + result.mult + '× ' + (pressOnHole ? '· PRESSED' : '') + '</div></div><div class="hole-card-body"><div class="score-row" style="border-bottom: 2px solid var(--masters-gold); padding-bottom:6px; margin-bottom:6px;"><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999;">Player</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Gross</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Str</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Net</div></div>' + scoreRows + (isPar3 ? renderGreenieControls(i, round, hole) : '') + ((winBadge || carriedBadge) ? '<div class="hole-result">' + carriedBadge + winBadge + '</div>' : '') + '</div>';
+  return div;
+}
+
+// Read-only summary card: each player's NET stroke total for Front 9, Back 9 and
+// the full 18, plus the skins earned for lowest net over each segment (the F9/B9/
+// round bonuses). Self-calculates from the same engine output as the hole cards.
+function renderTotalsCard(round, course, comp) {
+  const hr = comp.holeResults;
+  const players = round.players;
+  const segments = [
+    { key: 'front9', label: 'Front 9', s: 0, e: 9,  bonus: STATE.rules.front9Bonus },
+    { key: 'back9',  label: 'Back 9',  s: 9, e: 18, bonus: STATE.rules.back9Bonus },
+    { key: 'round',  label: 'Total 18', s: 0, e: 18, bonus: STATE.rules.roundBonus }
+  ];
+  function segNet(pid, s, e) {
+    let sum = 0, entered = 0;
+    for (let i = s; i < e; i++) { const v = hr[i].nets[pid]; if (v == null) continue; sum += v; entered++; }
+    return { sum, entered, total: e - s, complete: entered === (e - s) };
+  }
+  const div = document.createElement('div');
+  div.className = 'hole-card totals-card open';
+  const headCells = players.map(pid => {
+    const p = STATE.players.find(pl => pl.id === pid);
+    return '<th>' + escapeHtml(p ? p.name : '?') + '</th>';
+  }).join('');
+  const rows = segments.map(seg => {
+    const winners = comp.bonuses[seg.key] || [];        // populated only when the segment is complete for all players
+    const segComplete = winners.length > 0;
+    const cells = players.map(pid => {
+      const n = segNet(pid, seg.s, seg.e);
+      const isWin = winners.includes(pid);
+      const cls = 'net' + (isWin ? ' win' : '') + (!n.complete && n.entered > 0 ? ' partial' : '');
+      const val = n.entered === 0 ? '—' : (n.sum + (!n.complete ? ' *' : ''));
+      return '<td class="' + cls + '">' + val + '</td>';
+    }).join('');
+    let skinsCell;
+    if (!segComplete) {
+      skinsCell = '<td class="skins">pending</td>';
+    } else if (seg.bonus > 0) {
+      const names = winners.map(pid => escapeHtml((STATE.players.find(p => p.id === pid) || {}).name || '?'));
+      skinsCell = '<td class="skins awarded">+' + formatSkins(seg.bonus) + ' → ' + names.join(', ') + (winners.length > 1 ? ' (split)' : '') + '</td>';
+    } else {
+      skinsCell = '<td class="skins">—</td>';
+    }
+    return '<tr><td class="seg">' + seg.label + '</td>' + cells + skinsCell + '</tr>';
+  }).join('');
+  div.innerHTML = '<div class="totals-card-header"><h4>Nine &amp; Round Totals</h4><div class="meta">Net strokes · skins earned · auto</div></div>'
+    + '<div class="hole-card-body"><table class="totals-table"><thead><tr><th class="seg">Net Strokes</th>' + headCells + '<th class="skins">Skins Earned</th></tr></thead><tbody>' + rows + '</tbody></table>'
+    + '<div style="font-family:Inter; font-size:10px; letter-spacing:.06em; color:#999; margin-top:10px;">Lowest net over each segment earns the bonus skins. “*” marks a segment still in progress.</div></div>';
   return div;
 }
 
