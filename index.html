@@ -98,10 +98,15 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .hole-card.open .hole-card-body { display: block; }
 .hole-card.par3 .hole-card-header { background: linear-gradient(90deg, var(--masters-green) 0%, var(--masters-green-dark) 100%); }
 .hole-card.par3 .hole-card-header h4::after { content: ' · PAR 3'; margin-left: 4px; color: var(--masters-gold-bright); font-size: 12px; letter-spacing: 0.2em; }
-.score-row { display: grid; grid-template-columns: 1fr 70px 60px 80px; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--rule); }
+.score-row { display: grid; grid-template-columns: 1fr auto 34px 46px; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--rule); }
 .score-row:last-child { border-bottom: none; }
 .score-row-name { font-family: 'Playfair Display', serif; font-size: 17px; }
 .score-row input[type="number"] { text-align: center; padding: 6px; font-size: 16px; }
+/* Tap-friendly gross-score stepper: −/+ buttons flank the number so no keyboard is needed on mobile */
+.score-stepper { display: flex; align-items: center; gap: 6px; justify-content: center; }
+.step-btn { width: 42px; height: 42px; flex-shrink: 0; border: 1px solid var(--masters-green); background: var(--masters-ivory); color: var(--masters-green-dark); font-size: 24px; line-height: 1; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; -webkit-user-select: none; user-select: none; touch-action: manipulation; padding: 0; }
+.step-btn:active { background: var(--masters-green); color: var(--masters-cream); }
+.score-stepper input[type="number"] { width: 56px; min-height: 42px; padding: 8px 4px; font-size: 18px; }
 .score-row-strokes { font-family: 'Inter', sans-serif; font-size: 10px; color: var(--masters-gold); text-align: center; letter-spacing: 0.1em; }
 .score-row-net { font-family: 'Playfair Display', serif; font-style: italic; font-weight: 700; text-align: center; font-size: 18px; color: var(--masters-green-dark); }
 .hole-result { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--rule); display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
@@ -109,11 +114,18 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .skin-badge.carried { background: rgba(201,169,97,0.2); color: var(--masters-green-dark); border: 1px solid var(--masters-gold); }
 .skin-badge.greenie { background: var(--masters-green); color: var(--masters-cream); }
 .skin-badge.reverse { background: #444; color: var(--masters-gold-bright); }
+.skin-badge.birdie { background: var(--masters-red); color: var(--masters-gold-bright); }
 .greenie-controls { background: rgba(0,103,71,0.05); padding: 10px; margin-top: 10px; border-left: 3px solid var(--masters-green); }
 .greenie-controls label { display: flex; align-items: center; gap: 8px; font-family: 'Inter', sans-serif; font-size: 11px; margin-bottom: 6px; cursor: pointer; letter-spacing: normal; text-transform: none; color: var(--masters-green-dark); }
 .press-bar { background: linear-gradient(90deg, var(--masters-red) 0%, #6a1313 100%); color: var(--masters-cream); padding: 14px 18px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
 .press-bar-title { font-family: 'Playfair Display', serif; font-style: italic; font-size: 18px; color: var(--masters-gold-bright); }
 .press-bar-meta { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; }
+/* Active-press chips let a mistakenly called press be cancelled with one tap */
+.press-chip-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; width: 100%; margin-top: 4px; }
+.press-chip-label { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--masters-gold-bright); }
+.press-chip { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; padding: 7px 12px; min-height: 36px; background: rgba(0,0,0,0.25); color: var(--masters-cream); border: 1px solid var(--masters-gold); border-radius: 2px; cursor: pointer; touch-action: manipulation; }
+.press-chip:hover, .press-chip:active { background: var(--masters-green-deep); }
+.press-chip-x { color: var(--masters-gold-bright); margin-left: 5px; font-weight: 700; }
 .rule-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
 .rule-item { background: var(--masters-ivory); padding: 18px; border-left: 3px solid var(--masters-gold); }
 .rule-item h4 { font-family: 'Playfair Display', serif; font-style: italic; font-weight: 600; color: var(--masters-green-dark); margin-bottom: 8px; font-size: 18px; }
@@ -164,7 +176,10 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 @media (max-width: 640px) {
   .masthead-inner { flex-direction: column; text-align: center; }
   .wordmark { font-size: 32px; }
-  .score-row { grid-template-columns: 1fr 60px 50px 60px; gap: 6px; font-size: 14px; }
+  .score-row { grid-template-columns: minmax(48px,1fr) auto 26px 34px; gap: 5px; font-size: 14px; }
+  .step-btn { width: 38px; height: 38px; font-size: 22px; }
+  .score-stepper { gap: 4px; }
+  .score-stepper input[type="number"] { width: 44px; min-height: 38px; font-size: 16px; }
   .lb-name { font-size: 18px; }
   .lb-skins { font-size: 22px; }
   h2.section { font-size: 26px; }
@@ -277,8 +292,9 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
       <div class="stat-tile"><div class="stat-tile-label">Holes Completed</div><div class="stat-tile-value" id="roundHolesDone">0 / 18</div></div>
     </div>
     <div class="press-bar">
-      <div><div class="press-bar-title">Initiate a Press</div><div class="press-bar-meta">Only at the start of a hole · 3rd press requires back nine</div></div>
+      <div><div class="press-bar-title">Initiate a Press</div><div class="press-bar-meta">Only at the start of a hole · 3rd press requires back nine · tap a chip to cancel</div></div>
       <button class="btn btn-gold" id="pressBtn">Call the Press</button>
+      <div id="activePressList" class="press-chip-row"></div>
     </div>
     <div id="holesContainer"></div>
     <div class="card">
@@ -376,8 +392,9 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
   <h3 style="margin-top: 32px;">How We Play</h3>
   <div class="rule-grid">
     <div class="rule-item"><h4>Skins</h4><p>One skin per hole to the player with the lowest <em>net</em> score. Ties carry forward, compounding until won outright.</p></div>
-    <div class="rule-item"><h4>Presses</h4><p>A player behind on round skins may press at the start of a hole. Doubles (or increments) per-hole skin value for the rest of the round. Max 3; third needs back nine.</p></div>
-    <div class="rule-item"><h4>Carryover Compounding</h4><p>Carried skins are worth the value active when they're won — they benefit from later presses.</p></div>
+    <div class="rule-item"><h4>Presses</h4><p>A player behind on round skins may press at the start of a hole. Doubles (or increments) per-hole skin value from the pressed hole onward — never on earlier holes. Max 3; third needs back nine. Tap an active-press chip to cancel one called by mistake.</p></div>
+    <div class="rule-item"><h4>Net Birdies &amp; Eagles</h4><p>Win a hole with a <em>net birdie</em> and the skins won on that hole double; a <em>net eagle</em> (or better) triples them — at the current press value. The bonus applies only to that hole's skins, not to carried-in skins.</p></div>
+    <div class="rule-item"><h4>Carryovers</h4><p>Each carried skin is locked at the value of the hole it was won on. A later press lifts only the holes from the press onward — it never re-values skins carried from before it.</p></div>
     <div class="rule-item"><h4>Greenies</h4><p>Closest to the pin in regulation on par-3s earns a greenie at the current press value.</p></div>
     <div class="rule-item"><h4>Reverse Greenies</h4><p>Three-putt your greenie? Lose it; every other player earns a reverse greenie at the current press value.</p></div>
     <div class="rule-item"><h4>Nine &amp; Round Bonuses</h4><p>Lowest net F9, B9, and total round each pay a bonus. Ties split evenly.</p></div>
@@ -819,7 +836,11 @@ function computeRoundSkins(round) {
   const playerHcps = {};
   round.players.forEach(pid => { playerHcps[pid] = fullHcps[pid] - minHcp; });
   const holeResults = [];
-  let carry = 0;
+  // carryCount = number of skins carried forward; carryValue = their total worth in
+  // skin-value units, with each carried skin LOCKED at the multiplier of the hole it was
+  // won on. A later press never lifts the value of skins carried from earlier holes.
+  let carryCount = 0;
+  let carryValue = 0;
   for (let i = 0; i < 18; i++) {
     const hole = round.holes[i] || { scores: {}, greenie: null };
     const par = course.pars[i];
@@ -832,26 +853,55 @@ function computeRoundSkins(round) {
       if (gross == null || gross === '') allEntered = false;
       else nets[pid] = gross - strokesOnHole(playerHcps[pid], i, course);
     });
-    let winnerIds = [], skinsAwarded = 0, carriedAfter = carry;
+    const carriedCountIn = carryCount, carriedValueIn = carryValue;
+    let winnerIds = [], birdieTag = null;
+    let holeSkinCount = 0, holeSkinValue = 0;
+    let carriedCountCollected = 0, carriedValueCollected = 0;
+    let newCarryCount = carryCount, newCarryValue = carryValue;
     if (allEntered && round.players.length > 0) {
       const sorted = Object.entries(nets).sort((a,b) => a[1] - b[1]);
       const low = sorted[0][1];
       const winners = sorted.filter(([_, v]) => v === low);
-      if (winners.length === 1) { winnerIds = [winners[0][0]]; skinsAwarded = 1 + carry; carriedAfter = 0; }
-      else carriedAfter = carry + 1;
+      if (winners.length === 1) {
+        // Outright winner. A net birdie doubles the skins won ON THIS HOLE, a net eagle (or
+        // better) triples them — valued at the current press multiplier. This bonus applies
+        // only to the hole's own skins; carried-in skins are collected at their locked value.
+        const underPar = par - low;
+        const factor = underPar >= 2 ? 3 : (underPar === 1 ? 2 : 1);
+        birdieTag = factor === 3 ? 'eagle' : (factor === 2 ? 'birdie' : null);
+        winnerIds = [winners[0][0]];
+        holeSkinCount = factor;
+        holeSkinValue = factor * mult;
+        carriedCountCollected = carriedCountIn;
+        carriedValueCollected = carriedValueIn;
+        newCarryCount = 0;
+        newCarryValue = 0;
+      } else {
+        // Tie: one new skin carries forward, locked at THIS hole's multiplier.
+        newCarryCount = carriedCountIn + 1;
+        newCarryValue = carriedValueIn + mult;
+      }
     }
     let greenieAwardedTo = null, reverseGreenieFor = [], greenieSkins = 0, reverseGreenieSkins = 0;
     if (isPar3 && hole.greenie) {
       if (hole.greenie.playerId && !hole.greenie.threePutted) { greenieAwardedTo = hole.greenie.playerId; greenieSkins = STATE.rules.greenieValue * mult; }
       else if (hole.greenie.playerId && hole.greenie.threePutted) { reverseGreenieFor = round.players.filter(pid => pid !== hole.greenie.playerId); reverseGreenieSkins = STATE.rules.reverseGreenieValue * mult; }
     }
-    holeResults.push({ holeNum: i+1, par, mult, isPar3, nets, winnerIds, skinsAwarded, skinValueAtWin: mult, carry, carriedAfter, greenieAwardedTo, greenieSkins, reverseGreenieFor, reverseGreenieSkins, completed: allEntered });
-    carry = carriedAfter;
+    const won = winnerIds.length === 1;
+    const totalCountAwarded = won ? holeSkinCount + carriedCountCollected : 0;
+    const totalValueAwarded = won ? holeSkinValue + carriedValueCollected : 0;
+    holeResults.push({ holeNum: i+1, par, mult, isPar3, nets, winnerIds, birdieTag,
+      holeSkinCount, holeSkinValue, carriedCountIn, carriedValueIn,
+      carriedCountCollected, carriedValueCollected, totalCountAwarded, totalValueAwarded,
+      carryCountAfter: newCarryCount, carryValueAfter: newCarryValue,
+      greenieAwardedTo, greenieSkins, reverseGreenieFor, reverseGreenieSkins, completed: allEntered });
+    carryCount = newCarryCount;
+    carryValue = newCarryValue;
   }
   const perPlayer = {};
   round.players.forEach(pid => perPlayer[pid] = 0);
   holeResults.forEach(r => {
-    if (r.winnerIds.length === 1) perPlayer[r.winnerIds[0]] += r.skinsAwarded * r.skinValueAtWin;
+    if (r.winnerIds.length === 1) perPlayer[r.winnerIds[0]] += r.totalValueAwarded;
     if (r.greenieAwardedTo) perPlayer[r.greenieAwardedTo] += r.greenieSkins;
     if (r.reverseGreenieFor) r.reverseGreenieFor.forEach(pid => perPlayer[pid] += r.reverseGreenieSkins);
   });
@@ -991,6 +1041,12 @@ function renderActiveRound() {
   const cp = canCallPress(r);
   pressBtn.disabled = !cp.allowed;
   pressBtn.textContent = cp.allowed ? 'Call the Press' : cp.reason;
+  const pressList = $('#activePressList');
+  if (pressList) {
+    pressList.innerHTML = presses.length
+      ? '<span class="press-chip-label">Active presses:</span>' + presses.slice().sort((a,b) => a.hole - b.hole).map(p => '<button type="button" class="press-chip" onclick="cancelPress(' + p.hole + ')" title="Cancel this press">Hole ' + p.hole + '<span class="press-chip-x">✕</span></button>').join('')
+      : '';
+  }
   const container = $('#holesContainer');
   container.innerHTML = '';
   for (let i = 0; i < 18; i++) container.appendChild(renderHoleCard(i, r, course, comp));
@@ -1026,16 +1082,19 @@ function renderHoleCard(i, round, course, comp) {
   const isPar3 = par === 3;
   const result = comp.holeResults[i];
   const hole = round.holes[i] || { scores: {}, greenie: null };
-  const isOpen = round._openHoles && round._openHoles.has(i);
+  const isOpen = round._openHoles instanceof Set && round._openHoles.has(i);
   const div = document.createElement('div');
   div.className = 'hole-card' + (isPar3 ? ' par3' : '') + (isOpen ? ' open' : '');
-  const carriedBadge = result.carry > 0 ? '<span class="skin-badge carried">Carried · ' + result.carry + '</span>' : '';
+  const carriedBadge = result.carriedCountIn > 0 ? '<span class="skin-badge carried">Carried in · ' + result.carriedCountIn + '</span>' : '';
   let winBadge = '';
   if (result.completed) {
     if (result.winnerIds.length === 1) {
       const w = STATE.players.find(p => p.id === result.winnerIds[0]);
-      const sw = result.skinsAwarded;
-      winBadge = '<span class="skin-badge">' + escapeHtml(w.name) + ' · ' + sw + ' skin' + (sw>1?'s':'') + ' ×' + result.skinValueAtWin + '</span>';
+      const sw = result.totalCountAwarded;
+      const money = fmt$(result.totalValueAwarded * STATE.rules.skinValue);
+      const tag = result.birdieTag === 'eagle' ? ' <span class="skin-badge birdie">Net Eagle ×3</span>'
+                : result.birdieTag === 'birdie' ? ' <span class="skin-badge birdie">Net Birdie ×2</span>' : '';
+      winBadge = '<span class="skin-badge">' + escapeHtml(w.name) + ' · ' + sw + ' skin' + (sw>1?'s':'') + ' · ' + money + '</span>' + tag;
     } else winBadge = '<span class="skin-badge carried">Tied · Carries</span>';
   }
   if (result.greenieAwardedTo) {
@@ -1051,7 +1110,15 @@ function renderHoleCard(i, round, course, comp) {
     const strokes = strokesOnHole(comp.playerHcps[pid], i, course);
     const gross = hole.scores ? hole.scores[pid] : '';
     const net = (gross != null && gross !== '') ? (gross - strokes) : '';
-    return '<div class="score-row"><div class="score-row-name">' + escapeHtml(p ? p.name : '?') + '</div><input type="number" min="1" max="15" value="' + (gross != null && gross !== undefined ? gross : '') + '" onchange="setScore(' + i + ', \'' + pid + '\', this.value)" /><div class="score-row-strokes">' + (strokes>0?'+'+strokes:strokes||'') + '</div><div class="score-row-net">' + (net !== '' ? net : '—') + '</div></div>';
+    const gval = (gross != null && gross !== undefined ? gross : '');
+    return '<div class="score-row"><div class="score-row-name">' + escapeHtml(p ? p.name : '?') + '</div>'
+      + '<div class="score-stepper">'
+      +   '<button type="button" class="step-btn" aria-label="Lower score" onclick="bumpScore(' + i + ', \'' + pid + '\', -1)">−</button>'
+      +   '<input type="number" inputmode="numeric" pattern="[0-9]*" min="1" max="15" value="' + gval + '" onchange="setScore(' + i + ', \'' + pid + '\', this.value)" />'
+      +   '<button type="button" class="step-btn" aria-label="Raise score" onclick="bumpScore(' + i + ', \'' + pid + '\', 1)">+</button>'
+      + '</div>'
+      + '<div class="score-row-strokes">' + (strokes>0?'+'+strokes:strokes||'') + '</div>'
+      + '<div class="score-row-net">' + (net !== '' ? net : '—') + '</div></div>';
   }).join('');
   div.innerHTML = '<div class="hole-card-header" onclick="toggleHole(' + i + ')"><h4>Hole ' + (i+1) + ' <span style="font-size:14px; color:rgba(245,239,224,.7); margin-left:8px;">Par ' + par + '</span></h4><div class="meta">HCP ' + hi + ' · ' + result.mult + '× ' + (pressOnHole ? '· PRESSED' : '') + '</div></div><div class="hole-card-body"><div class="score-row" style="border-bottom: 2px solid var(--masters-gold); padding-bottom:6px; margin-bottom:6px;"><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999;">Player</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Gross</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Str</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Net</div></div>' + scoreRows + (isPar3 ? renderGreenieControls(i, round, hole) : '') + ((winBadge || carriedBadge) ? '<div class="hole-result">' + carriedBadge + winBadge + '</div>' : '') + '</div>';
   return div;
@@ -1069,7 +1136,7 @@ function renderGreenieControls(i, round, hole) {
 
 function toggleHole(i) {
   if (!STATE.activeRound) return;
-  if (!STATE.activeRound._openHoles) STATE.activeRound._openHoles = new Set();
+  if (!(STATE.activeRound._openHoles instanceof Set)) STATE.activeRound._openHoles = new Set();
   const set = STATE.activeRound._openHoles;
   if (set.has(i)) set.delete(i); else set.add(i);
   renderActiveRound();
@@ -1080,6 +1147,25 @@ function setScore(holeIdx, playerId, value) {
   if (!round.holes[holeIdx]) round.holes[holeIdx] = { scores: {}, greenie: null };
   const v = value === '' || value == null ? null : parseInt(value, 10);
   round.holes[holeIdx].scores[playerId] = (v != null && !isNaN(v)) ? v : null;
+  saveState();
+  renderActiveRound();
+  renderLeaderboard();
+}
+// Tap −/+ to set a gross score without a keyboard. The first tap on an empty
+// cell lands on par (most scores are near par); subsequent taps nudge by one.
+function bumpScore(holeIdx, playerId, delta) {
+  if (!STATE.activeRound) return;
+  const round = STATE.activeRound;
+  const course = STATE.courses.find(c => c.id === round.courseId);
+  if (!round.holes[holeIdx]) round.holes[holeIdx] = { scores: {}, greenie: null };
+  const cur = round.holes[holeIdx].scores[playerId];
+  let next;
+  if (cur == null || cur === '' || isNaN(cur)) {
+    next = course && course.pars[holeIdx] ? course.pars[holeIdx] : 4;
+  } else {
+    next = Math.min(15, Math.max(1, cur + delta));
+  }
+  round.holes[holeIdx].scores[playerId] = next;
   saveState();
   renderActiveRound();
   renderLeaderboard();
@@ -1112,6 +1198,18 @@ function callPress() {
   showToast('Press called on hole ' + check.hole + '!');
   renderActiveRound();
   renderLeaderboard();
+}
+function cancelPress(hole) {
+  if (!STATE.activeRound) return;
+  const presses = STATE.activeRound.presses || [];
+  if (!presses.some(p => p.hole === hole)) return;
+  showConfirm('Cancel the press called on hole ' + hole + '? Skin values recalculate immediately.', () => {
+    STATE.activeRound.presses = (STATE.activeRound.presses || []).filter(p => p.hole !== hole);
+    saveState();
+    showToast('Press on hole ' + hole + ' cancelled.');
+    renderActiveRound();
+    renderLeaderboard();
+  });
 }
 
 function startRound() {
