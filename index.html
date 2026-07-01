@@ -120,12 +120,14 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .press-bar { background: linear-gradient(90deg, var(--masters-red) 0%, #6a1313 100%); color: var(--masters-cream); padding: 14px 18px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
 .press-bar-title { font-family: 'Playfair Display', serif; font-style: italic; font-size: 18px; color: var(--masters-gold-bright); }
 .press-bar-meta { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; }
-/* Active-press chips let a mistakenly called press be cancelled with one tap */
+/* Active-press chips: move a press to a different hole, or cancel it with one tap */
 .press-chip-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; width: 100%; margin-top: 4px; }
 .press-chip-label { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--masters-gold-bright); }
-.press-chip { font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; padding: 7px 12px; min-height: 36px; background: rgba(0,0,0,0.25); color: var(--masters-cream); border: 1px solid var(--masters-gold); border-radius: 2px; cursor: pointer; touch-action: manipulation; }
-.press-chip:hover, .press-chip:active { background: var(--masters-green-deep); }
-.press-chip-x { color: var(--masters-gold-bright); margin-left: 5px; font-weight: 700; }
+.press-chip { display: inline-flex; align-items: center; gap: 4px; font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 4px 3px 8px; min-height: 36px; background: rgba(0,0,0,0.25); color: var(--masters-cream); border: 1px solid var(--masters-gold); border-radius: 2px; touch-action: manipulation; }
+.press-chip-select { background: transparent; color: var(--masters-cream); border: none; font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.05em; padding: 4px 2px; min-height: 32px; cursor: pointer; }
+.press-chip-select option { color: #1a1a1a; text-transform: none; letter-spacing: normal; }
+.press-chip-x-btn { background: transparent; border: none; color: var(--masters-gold-bright); font-weight: 700; font-size: 14px; line-height: 1; cursor: pointer; padding: 4px 8px; min-height: 32px; min-width: 32px; touch-action: manipulation; }
+.press-chip-x-btn:hover, .press-chip-x-btn:active { color: var(--masters-cream); }
 .rule-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
 .rule-item { background: var(--masters-ivory); padding: 18px; border-left: 3px solid var(--masters-gold); }
 .rule-item h4 { font-family: 'Playfair Display', serif; font-style: italic; font-weight: 600; color: var(--masters-green-dark); margin-bottom: 8px; font-size: 18px; }
@@ -292,7 +294,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
       <div class="stat-tile"><div class="stat-tile-label">Holes Completed</div><div class="stat-tile-value" id="roundHolesDone">0 / 18</div></div>
     </div>
     <div class="press-bar">
-      <div><div class="press-bar-title">Initiate a Press</div><div class="press-bar-meta">Only at the start of a hole · 3rd press requires back nine · tap a chip to cancel</div></div>
+      <div><div class="press-bar-title">Initiate a Press</div><div class="press-bar-meta">Only at the start of a hole · 3rd press requires back nine · use a chip to move or cancel</div></div>
       <button class="btn btn-gold" id="pressBtn">Call the Press</button>
       <div id="activePressList" class="press-chip-row"></div>
     </div>
@@ -392,7 +394,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
   <h3 style="margin-top: 32px;">How We Play</h3>
   <div class="rule-grid">
     <div class="rule-item"><h4>Skins</h4><p>One skin per hole to the player with the lowest <em>net</em> score. Ties carry forward, compounding until won outright.</p></div>
-    <div class="rule-item"><h4>Presses</h4><p>A player behind on round skins may press at the start of a hole. Doubles (or increments) per-hole skin value from the pressed hole onward — never on earlier holes. Max 3; third needs back nine. Tap an active-press chip to cancel one called by mistake.</p></div>
+    <div class="rule-item"><h4>Presses</h4><p>A player behind on round skins may press at the start of a hole. Doubles (or increments) per-hole skin value from the pressed hole onward — never on earlier holes. Max 3; third needs back nine. Called a press on the wrong hole? Use its chip to move it to another hole or cancel it — skins recalculate instantly.</p></div>
     <div class="rule-item"><h4>Net Birdies &amp; Eagles</h4><p>Win a hole with a <em>net birdie</em> and the skins won on that hole double; a <em>net eagle</em> (or better) triples them — at the current press value. The bonus applies only to that hole's skins, not to carried-in skins.</p></div>
     <div class="rule-item"><h4>Carryovers</h4><p>Each carried skin is locked at the value of the hole it was won on. A later press lifts only the holes from the press onward — it never re-values skins carried from before it.</p></div>
     <div class="rule-item"><h4>Greenies</h4><p>Closest to the pin in regulation on par-3s earns a greenie at the current press value.</p></div>
@@ -1044,7 +1046,14 @@ function renderActiveRound() {
   const pressList = $('#activePressList');
   if (pressList) {
     pressList.innerHTML = presses.length
-      ? '<span class="press-chip-label">Active presses:</span>' + presses.slice().sort((a,b) => a.hole - b.hole).map(p => '<button type="button" class="press-chip" onclick="cancelPress(' + p.hole + ')" title="Cancel this press">Hole ' + p.hole + '<span class="press-chip-x">✕</span></button>').join('')
+      ? '<span class="press-chip-label">Active presses:</span>' + presses.slice().sort((a,b) => a.hole - b.hole).map(p => {
+          let opts = '';
+          for (let hn = 1; hn <= 18; hn++) {
+            const taken = hn !== p.hole && presses.some(x => x.hole === hn);
+            opts += '<option value="' + hn + '"' + (hn === p.hole ? ' selected' : '') + (taken ? ' disabled' : '') + '>Hole ' + hn + (taken ? ' — pressed' : '') + '</option>';
+          }
+          return '<span class="press-chip"><select class="press-chip-select" aria-label="Move press to another hole" onchange="editPress(' + p.hole + ', this.value)">' + opts + '</select><button type="button" class="press-chip-x-btn" aria-label="Cancel press" title="Cancel this press" onclick="cancelPress(' + p.hole + ')">✕</button></span>';
+        }).join('')
       : '';
   }
   const container = $('#holesContainer');
@@ -1210,6 +1219,23 @@ function cancelPress(hole) {
     renderActiveRound();
     renderLeaderboard();
   });
+}
+// Move an already-called press to a different hole, in case it was logged on the
+// wrong one. Any empty hole 1–18 is allowed; skins recalculate immediately.
+function editPress(oldHole, newHoleRaw) {
+  if (!STATE.activeRound) return;
+  const presses = STATE.activeRound.presses || [];
+  const p = presses.find(x => x.hole === oldHole);
+  if (!p) return;
+  const newHole = parseInt(newHoleRaw, 10);
+  if (isNaN(newHole) || newHole < 1 || newHole > 18) { showToast('Pick a hole 1–18'); renderActiveRound(); return; }
+  if (newHole === oldHole) return;
+  if (presses.some(x => x.hole === newHole)) { showToast('Hole ' + newHole + ' already has a press'); renderActiveRound(); return; }
+  p.hole = newHole;
+  saveState();
+  showToast('Press moved to hole ' + newHole + '.');
+  renderActiveRound();
+  renderLeaderboard();
 }
 
 function startRound() {
