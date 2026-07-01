@@ -6,76 +6,98 @@ Two services, both free tier, ~20 minutes total.
 
 ---
 
-## Part 1 — Supabase (the database)
+## Part 1 — Firebase Firestore (the database)
 
 ### 1.1 Create the project
 
-1. Go to **https://supabase.com** and sign up (GitHub or email).
-2. Click **New project**.
-3. Name it `wjz-nasters` (or whatever you like).
-4. Pick a strong database password (save it somewhere — you won't need it often, but losing it locks you out).
-5. Region: pick **West US (N. California)** or whichever is closest to South Dakota.
-6. Plan: **Free**.
-7. Click **Create new project**. Wait ~2 minutes for it to provision.
+1. Go to **https://console.firebase.google.com** and sign in with a Google account.
+2. Click **Add project** (or **Create a project**).
+3. Name it `wjz-nasters` (or whatever you like), then **Continue**.
+4. **Google Analytics** is optional — you can turn it off; it's not needed here.
+5. Click **Create project** and wait ~30 seconds for it to provision, then **Continue**.
 
-### 1.2 Create the table
+### 1.2 Register a Web app and grab the config
 
-When the project's ready, click the **SQL Editor** icon in the left sidebar, then **New query**, and paste this:
+1. On the project overview page, click the **web icon** (`</>`) under "Get started by adding Firebase to your app."
+2. Give it a nickname like `wjz-nasters-web`. **Do not** check "Firebase Hosting" (we use Netlify). Click **Register app**.
+3. Firebase shows a `firebaseConfig` object. Copy it into a notes app for Part 2 — it looks like:
 
-```sql
--- The Nasters: single-document game state, real-time enabled
-
-create table if not exists nasters_state (
-  id text primary key,
-  state jsonb not null,
-  updated_at timestamptz default now()
-);
-
-alter table nasters_state enable row level security;
-
--- Anyone with the anon key can read/write. The Netlify URL is the secret.
-create policy "public read"   on nasters_state for select using (true);
-create policy "public insert" on nasters_state for insert with check (true);
-create policy "public update" on nasters_state for update using (true);
-
--- Enable real-time broadcasts on this table
-alter publication supabase_realtime add table nasters_state;
+```js
+const firebaseConfig = {
+  apiKey: "AIzaSy...",
+  authDomain: "wjz-nasters.firebaseapp.com",
+  projectId: "wjz-nasters",
+  storageBucket: "wjz-nasters.appspot.com",
+  messagingSenderId: "1234567890",
+  appId: "1:1234567890:web:abcdef123456"
+};
 ```
 
-Click **Run** (or `Ctrl+Enter`). You should see "Success. No rows returned."
+> These web config values are **safe to put in client-side code** — Firebase is designed this way. Access is controlled by the Firestore security rules you set in the next step, not by hiding these values.
 
-### 1.3 Grab the credentials
+### 1.3 Create the Firestore database
 
-1. In the left sidebar, click the **gear icon** (Project Settings) → **API**.
-2. Copy two things into a notes app for the next step:
-   - **Project URL** (looks like `https://abcdefghij.supabase.co`)
-   - **anon public** key (the long string starting with `eyJ...`)
+1. In the left sidebar, click **Build → Firestore Database**, then **Create database**.
+2. Pick a location closest to South Dakota (e.g. **nam5 (United States)** or **us-central1**). This can't be changed later.
+3. Start in **production mode** (we'll paste explicit rules next). Click **Create**.
 
-> The anon key is safe to put in client-side code. It's designed for browser use and only allows the operations our policies permit.
+### 1.4 Set the security rules
+
+1. In Firestore, open the **Rules** tab and replace everything with:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // The Nasters: a single shared game document per room.
+    // Anyone who has the app URL + web config can read/write.
+    // The obscure Netlify URL is the practical secret.
+    match /nasters_state/{roomId} {
+      allow read, write: if true;
+    }
+  }
+}
+```
+
+2. Click **Publish**.
+
+> This mirrors the app's original "anyone with the link can play" model. Want it locked down harder? See the note at the end of Troubleshooting.
 
 ---
 
 ## Part 2 — Configure the app
 
-### 2.1 Paste credentials into the HTML
+### 2.1 Paste your Firebase config into the HTML
 
-Open `index.html` in a text editor (VS Code, TextEdit, Notepad, anything). Search for `SUPABASE_URL` — you'll find this block near the top of the JavaScript:
+Open `index.html` in a text editor (VS Code, TextEdit, Notepad, anything). Search for `firebaseConfig` — you'll find this block near the top of the JavaScript:
 
 ```js
-const SUPABASE_URL = '';         // e.g. 'https://abcdefgh.supabase.co'
-const SUPABASE_ANON_KEY = '';    // e.g. 'eyJ...'  (the "anon public" key)
+const firebaseConfig = {
+  apiKey: '',             // e.g. 'AIzaSy...'
+  authDomain: '',         // e.g. 'wjz-nasters.firebaseapp.com'
+  projectId: '',          // e.g. 'wjz-nasters'
+  storageBucket: '',      // e.g. 'wjz-nasters.appspot.com'
+  messagingSenderId: '',  // e.g. '1234567890'
+  appId: ''               // e.g. '1:1234567890:web:abcdef'
+};
 const ROOM_ID = 'wjz-nasters';   // shared room ID — change if you want a separate game
 ```
 
-Paste your values between the quotes:
+Fill in the values from the `firebaseConfig` you copied in Part 1.2:
 
 ```js
-const SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIs...';
+const firebaseConfig = {
+  apiKey: 'AIzaSy...',
+  authDomain: 'wjz-nasters.firebaseapp.com',
+  projectId: 'wjz-nasters',
+  storageBucket: 'wjz-nasters.appspot.com',
+  messagingSenderId: '1234567890',
+  appId: '1:1234567890:web:abcdef123456'
+};
 const ROOM_ID = 'wjz-nasters';
 ```
 
-Save the file.
+The app only needs `apiKey` and `projectId` to be filled to switch on sync, but paste all six so nothing else in Firebase complains. Save the file.
 
 > **Tip:** Want a separate game for a future trip (Costa Rica 2027, etc)? Change `ROOM_ID` to a different string. All three of you must use the same `ROOM_ID` to share the same game.
 
@@ -106,7 +128,7 @@ This repo is set up for **continuous deployment from GitHub** — connect it onc
 
 ## Part 4 — Share with Zac and Jon
 
-Text them the Netlify URL. That's it. They open it, the app loads the current state from Supabase, and any score they enter shows up on your phone within a second.
+Text them the Netlify URL. That's it. They open it, the app loads the current state from Firestore, and any score they enter shows up on your phone within a second.
 
 If you want a vanity URL like `wjznasters.com`, buy it from Cloudflare/Namecheap (~$10/year) and point it at Netlify per their docs.
 
@@ -121,25 +143,28 @@ Made a code change? Commit it and push to the connected branch — Netlify rebui
 ## Troubleshooting
 
 **Status shows "● Error" or stays on "○ Local only":**
-- Check that `SUPABASE_URL` and `SUPABASE_ANON_KEY` are pasted correctly with no extra quotes or spaces.
-- Open browser console (Cmd-Opt-J on Mac Chrome, Cmd-Opt-I on Safari → Console) and look for red errors.
-- Confirm the SQL ran successfully in Supabase (check **Table Editor** — `nasters_state` should exist).
+- Check that `apiKey` and `projectId` are pasted correctly with no extra quotes or spaces.
+- Open browser console (Cmd-Opt-J on Mac Chrome, Cmd-Opt-I on Safari → Console) and look for red errors. A `permission-denied` error means the security rules from Part 1.4 weren't published.
+- Confirm the Firestore database exists (Firebase console → **Build → Firestore Database**).
 
 **Realtime not working but writes are:**
-- Confirm the `alter publication supabase_realtime add table nasters_state;` line ran without error.
-- In Supabase: **Database → Replication** — `nasters_state` should be listed under the realtime publication.
+- This is almost always the security rules. Firestore's live listener needs `read` access — confirm the Part 1.4 rules are published and include `allow read, write: if true;` for `nasters_state`.
+- Check the browser console for a `Missing or insufficient permissions` message on the listener.
 
 **Want to wipe everything and start over:**
-In SQL Editor: `delete from nasters_state where id = 'wjz-nasters';` Then reload the app.
+In the Firebase console: **Build → Firestore Database → Data** tab, open the `nasters_state` collection, and delete the `wjz-nasters` document. Then reload the app.
 
 **Want to back up a trip permanently:**
-In SQL Editor: `select state from nasters_state where id = 'wjz-nasters';` Copy the JSON and save it somewhere. You can paste it back in later via the Share/Sync → Import flow.
+In **Firestore Database → Data**, open `nasters_state / wjz-nasters` and copy the `state` field (it's the full game as JSON text). Save it somewhere. You can paste it back later via the app's Share/Sync → Import flow.
+
+**Want to lock it down harder than "anyone with the link":**
+The rules in Part 1.4 let anyone with the URL read/write — fine for a private trip URL you only share with two friends. To restrict it, enable **Firebase Authentication** (e.g. anonymous or Google sign-in) and change the rule to `allow read, write: if request.auth != null;`. That's a larger change and requires adding sign-in to the app — ask if you want it.
 
 ---
 
 ## Cost reality check
 
-- **Supabase free tier:** 500 MB database, 50K monthly active users, 2 GB egress. Your game state is a few KB. You'll never come close.
-- **Netlify free tier:** 100 GB bandwidth/month, unlimited sites. A 70 KB HTML page served to three phones is rounding error.
+- **Firebase (Spark) free tier:** 1 GiB stored, 50K document reads + 20K writes + 20K deletes **per day**. Your game is one small document and three phones; you'll never come close.
+- **Netlify free tier:** 100 GB bandwidth/month, unlimited sites. A ~90 KB HTML page served to three phones is rounding error.
 
 You're well under the free limits unless something goes very strange.

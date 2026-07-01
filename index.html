@@ -173,7 +173,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
   .hall-prize-name { font-size: 28px; }
 }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 </head>
 <body>
 
@@ -552,28 +553,41 @@ const SHARED = true;
 /* ============================================================
    CLOUD SYNC CONFIGURATION
    ============================================================
-   To enable real-time multi-device sync via Supabase:
-   1. Create a free project at https://supabase.com
-   2. Run the SQL from DEPLOY.md in the SQL Editor
-   3. Get your Project URL and anon (public) key from
-      Project Settings → API
-   4. Paste them below, then deploy to Netlify
+   To enable real-time multi-device sync via Firebase Firestore:
+   1. Create a free project at https://console.firebase.google.com
+   2. Add a Web app and copy its config object (see DEPLOY.md)
+   3. Create a Firestore database and paste the security rules
+      from DEPLOY.md
+   4. Fill in the config below, then deploy to Netlify
+
+   The web config below is safe to expose in client-side code —
+   access is governed by Firestore security rules, not by hiding
+   these values.
    ============================================================ */
-const SUPABASE_URL = '';         // e.g. 'https://abcdefgh.supabase.co'
-const SUPABASE_ANON_KEY = '';    // e.g. 'eyJ...'  (the "anon public" key)
+const firebaseConfig = {
+  apiKey: '',             // e.g. 'AIzaSy...'
+  authDomain: '',         // e.g. 'wjz-nasters.firebaseapp.com'
+  projectId: '',          // e.g. 'wjz-nasters'
+  storageBucket: '',      // e.g. 'wjz-nasters.appspot.com'
+  messagingSenderId: '',  // e.g. '1234567890'
+  appId: ''               // e.g. '1:1234567890:web:abcdef'
+};
 const ROOM_ID = 'wjz-nasters';   // shared room ID — change if you want a separate game
 
-const CLOUD_ENABLED = !!(SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase);
-let _supa = null;
-let _realtimeChannel = null;
+const CLOUD_ENABLED = !!(firebaseConfig.apiKey && firebaseConfig.projectId && window.firebase);
+let _db = null;
+let _docRef = null;
+let _unsubscribe = null;
 let _lastLocalSaveAt = 0;
 let _saveDebounceTimer = null;
 let _syncStatus = 'offline';
 
 if (CLOUD_ENABLED) {
   try {
-    _supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  } catch(e) { console.error('Supabase init failed', e); }
+    firebase.initializeApp(firebaseConfig);
+    _db = firebase.firestore();
+    _docRef = _db.collection('nasters_state').doc(ROOM_ID);
+  } catch(e) { console.error('Firebase init failed', e); }
 }
 
 function setSyncStatus(s) {
@@ -601,16 +615,15 @@ async function saveState() {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(STATE)); localOk = true; } catch(e){}
 
   // Cloud save (debounced so rapid edits don't hammer the API)
-  if (CLOUD_ENABLED && _supa) {
+  if (CLOUD_ENABLED && _docRef) {
     if (_saveDebounceTimer) clearTimeout(_saveDebounceTimer);
     setSyncStatus('syncing');
     _saveDebounceTimer = setTimeout(async () => {
       try {
         _lastLocalSaveAt = Date.now();
-        const { error } = await _supa
-          .from('nasters_state')
-          .upsert({ id: ROOM_ID, state: STATE, updated_at: new Date().toISOString() });
-        if (error) throw error;
+        // Store the whole game as a JSON string so nested arrays
+        // (course pars/hcps, round scores) survive Firestore intact.
+        await _docRef.set({ state: JSON.stringify(STATE), updated_at: new Date().toISOString() });
         setSyncStatus('synced');
       } catch (e) {
         console.error('Cloud save failed', e);
@@ -627,18 +640,16 @@ async function loadState() {
     let raw = null;
 
     // 1) Try cloud first if configured
-    if (CLOUD_ENABLED && _supa) {
+    if (CLOUD_ENABLED && _docRef) {
       setSyncStatus('syncing');
       try {
-        const { data, error } = await _supa
-          .from('nasters_state')
-          .select('state')
-          .eq('id', ROOM_ID)
-          .maybeSingle();
-        if (error) throw error;
-        if (data && data.state) {
-          raw = JSON.stringify(data.state);
-          setSyncStatus('synced');
+        const snap = await _docRef.get();
+        if (snap.exists) {
+          const data = snap.data();
+          if (data && data.state) {
+            raw = typeof data.state === 'string' ? data.state : JSON.stringify(data.state);
+            setSyncStatus('synced');
+          }
         }
       } catch (e) {
         console.error('Cloud load failed', e);
@@ -691,7 +702,7 @@ async function loadState() {
     }
 
     // 3) Subscribe to real-time updates from other devices
-    if (CLOUD_ENABLED && _supa) {
+    if (CLOUD_ENABLED && _docRef) {
       subscribeToRealtime();
     } else {
       setSyncStatus('offline');
@@ -701,36 +712,37 @@ async function loadState() {
 }
 
 function subscribeToRealtime() {
-  if (_realtimeChannel) {
-    try { _supa.removeChannel(_realtimeChannel); } catch(e){}
+  if (_unsubscribe) {
+    try { _unsubscribe(); } catch(e){}
   }
-  _realtimeChannel = _supa
-    .channel('nasters_state_room_' + ROOM_ID)
-    .on('postgres_changes',
-        { event: '*', schema: 'public', table: 'nasters_state', filter: 'id=eq.' + ROOM_ID },
-        payload => {
-          // Ignore echoes of our own writes (within 2 seconds)
-          if (Date.now() - _lastLocalSaveAt < 2000) return;
-          if (!payload.new || !payload.new.state) return;
+  _unsubscribe = _docRef.onSnapshot(snap => {
+    // Ignore echoes of our own writes (within 2 seconds)
+    if (Date.now() - _lastLocalSaveAt < 2000) return;
+    if (!snap.exists) return;
+    const data = snap.data();
+    if (!data || !data.state) return;
+    const remoteState = typeof data.state === 'string' ? JSON.parse(data.state) : data.state;
 
-          // Don't blow away focused input
-          const focused = document.activeElement;
-          const isEditingInput = focused && (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA') && focused.type !== 'checkbox' && focused.type !== 'radio';
-          if (isEditingInput) {
-            // Queue the update for when the user is done typing
-            setTimeout(() => {
-              if (document.activeElement === focused) {
-                // Still typing — try again later
-                setTimeout(() => applyRemoteState(payload.new.state), 1500);
-              } else {
-                applyRemoteState(payload.new.state);
-              }
-            }, 800);
-            return;
-          }
-          applyRemoteState(payload.new.state);
-        })
-    .subscribe();
+    // Don't blow away focused input
+    const focused = document.activeElement;
+    const isEditingInput = focused && (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA') && focused.type !== 'checkbox' && focused.type !== 'radio';
+    if (isEditingInput) {
+      // Queue the update for when the user is done typing
+      setTimeout(() => {
+        if (document.activeElement === focused) {
+          // Still typing — try again later
+          setTimeout(() => applyRemoteState(remoteState), 1500);
+        } else {
+          applyRemoteState(remoteState);
+        }
+      }, 800);
+      return;
+    }
+    applyRemoteState(remoteState);
+  }, err => {
+    console.error('Realtime listener failed', err);
+    setSyncStatus('error');
+  });
 }
 
 function applyRemoteState(remoteState) {

@@ -3,7 +3,7 @@
 A live skins-game tracker for Warren, Zac & Jon — "A Tradition Unlike Any Other."
 
 A single, self-contained HTML page that tracks scores, handicaps, and skins in
-real time across everyone's phones. State is synced through [Supabase](https://supabase.com)
+real time across everyone's phones. State is synced through [Firebase Firestore](https://firebase.google.com/products/firestore)
 and the site is hosted on [Netlify](https://www.netlify.com), auto-deploying from
 this repository.
 
@@ -13,31 +13,37 @@ this repository.
   this as the homepage.
 - **`netlify.toml`** — Netlify config. No build step; the repo root is published
   as-is and every push to the connected branch triggers a deploy.
-- **`DEPLOY.md`** — full step-by-step guide for standing up Supabase and Netlify.
+- **`DEPLOY.md`** — full step-by-step guide for standing up Firebase and Netlify.
 
 ## Deploying
 
 This repo is set up for **continuous deployment**: connect it to a Netlify site
 once, and thereafter every push to the deploy branch publishes automatically —
-no more drag-and-drop. See [`DEPLOY.md`](./DEPLOY.md) for the one-time Supabase
+no more drag-and-drop. See [`DEPLOY.md`](./DEPLOY.md) for the one-time Firebase
 and Netlify setup.
 
 ### Enabling live sync
 
-Real-time sync stays off until Supabase credentials are supplied. Open
+Real-time sync stays off until Firebase credentials are supplied. Open
 `index.html`, find the config block near the top of the `<script>` (search for
-`SUPABASE_URL`), and paste in your Project URL and anon public key:
+`firebaseConfig`), and paste in the web config from your Firebase project:
 
 ```js
-const SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJ...';   // the "anon public" key
-const ROOM_ID = 'wjz-nasters';        // shared room; same value for all players
+const firebaseConfig = {
+  apiKey: 'AIzaSy...',
+  authDomain: 'wjz-nasters.firebaseapp.com',
+  projectId: 'wjz-nasters',
+  storageBucket: 'wjz-nasters.appspot.com',
+  messagingSenderId: '1234567890',
+  appId: '1:1234567890:web:abcdef123456'
+};
+const ROOM_ID = 'wjz-nasters';   // shared room; same value for all players
 ```
 
-The anon key is designed for browser use and is safe to commit — access is
-constrained by the row-level-security policies in `DEPLOY.md`. Commit and push,
-and Netlify redeploys with sync enabled. Until then the app runs in **local-only**
-mode (state lives in the browser).
+These web config values are designed for browser use and are safe to commit —
+access is constrained by the Firestore security rules in `DEPLOY.md`. Commit and
+push, and Netlify redeploys with sync enabled. Until then the app runs in
+**local-only** mode (state lives in the browser).
 
 ## Local preview
 
