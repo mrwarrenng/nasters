@@ -1,0 +1,23 @@
+# Netlify configuration for The WJZ Nasters
+# This is a single static HTML page — no build step required.
+# Netlify serves index.html from the repo root and auto-deploys
+# on every push to the connected branch.
+
+[build]
+  publish = "."
+  command = ""
+
+# Security + caching headers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+
+# Never cache the HTML shell so code updates go live immediately.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
