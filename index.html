@@ -94,6 +94,10 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .hole-card-header { background: var(--masters-green); color: var(--masters-cream); padding: 12px 18px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
 .hole-card-header h4 { font-family: 'Playfair Display', serif; font-style: italic; font-size: 18px; font-weight: 600; }
 .hole-card-header .meta { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase; color: var(--masters-gold-bright); }
+.hole-head-right { display: flex; align-items: center; gap: 12px; }
+.hole-toggle { font-size: 13px; line-height: 1; color: var(--masters-gold-bright); width: 18px; text-align: center; flex-shrink: 0; }
+.hole-card.decided .hole-card-header { background: var(--masters-green-dark); }
+.hole-card.decided .hole-card-header .meta { color: rgba(245,239,224,0.75); }
 .hole-card-body { padding: 18px; display: none; }
 .hole-card.open .hole-card-body { display: block; }
 .hole-card.par3 .hole-card-header { background: linear-gradient(90deg, var(--masters-green) 0%, var(--masters-green-dark) 100%); }
@@ -140,8 +144,14 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .totals-table td.seg { color: var(--masters-green-dark); }
 .totals-table td.win { font-weight: 700; background: rgba(201,169,97,0.18); }
 .totals-table td.partial { color: #b0a98f; }
-.totals-table .skins, .totals-table th.skins { text-align: right; font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.06em; color: var(--masters-gold); white-space: nowrap; }
-.totals-table td.skins.awarded { color: var(--masters-green-dark); font-weight: 600; }
+.totals-bonuses-label { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--masters-gold); margin: 14px 0 8px; }
+.totals-bonuses { display: flex; flex-direction: column; gap: 6px; }
+.tb-item { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 4px 0; border-bottom: 1px dashed var(--rule); }
+.tb-item:last-child { border-bottom: none; }
+.tb-seg { font-family: 'Playfair Display', serif; font-style: italic; font-size: 16px; color: var(--masters-green-dark); flex-shrink: 0; }
+.tb-val { font-family: 'Cormorant Garamond', serif; font-size: 15px; color: #444; text-align: right; min-width: 0; overflow-wrap: anywhere; }
+.tb-val b { font-family: 'Playfair Display', serif; font-style: italic; color: var(--masters-gold); font-size: 17px; margin-right: 4px; }
+.tb-pending { color: #b0a98f; font-style: italic; }
 /* Round Summary (Live): per-player skin-type breakdown chips */
 .live-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
 .live-row:last-child { border-bottom: none; }
@@ -287,7 +297,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
     <div class="stat-tile"><div class="stat-tile-label">Pot in Play</div><div class="stat-tile-value" id="statPot">$0</div></div>
   </div>
   <div class="card">
-    <div class="card-header"><div class="card-title">Recent Round Recap</div><div class="card-meta">Last Three Sessions</div></div>
+    <div class="card-header"><div class="card-title">Round Recap</div><div class="card-meta">All Rounds in Scope</div></div>
     <div id="recentRecap"></div>
   </div>
 </section>
@@ -1016,7 +1026,7 @@ function renderLeaderboard() {
   $('#statPot').textContent = fmt$(totalSkins * STATE.rules.skinValue);
 
   const recapBody = $('#recentRecap');
-  const recent = scopedRounds.slice(-3).reverse();
+  const recent = scopedRounds.slice().reverse();
   if (recent.length === 0) {
     recapBody.innerHTML = '<div class="empty-state" style="padding: 20px;">No rounds in scope yet.</div>';
   } else {
@@ -1142,9 +1152,10 @@ function renderHoleCard(i, round, course, comp) {
   const isPar3 = par === 3;
   const result = comp.holeResults[i];
   const hole = round.holes[i] || { scores: {}, greenie: null };
-  const isOpen = round._openHoles instanceof Set && round._openHoles.has(i);
+  const decided = result.completed && result.totalCountAwarded > 0;
+  const isOpen = holeIsOpen(round, i, result);
   const div = document.createElement('div');
-  div.className = 'hole-card' + (isPar3 ? ' par3' : '') + (isOpen ? ' open' : '');
+  div.className = 'hole-card' + (isPar3 ? ' par3' : '') + (isOpen ? ' open' : '') + (decided ? ' decided' : '');
   const carriedBadge = result.carriedCountIn > 0 ? '<span class="skin-badge carried">Carried in · ' + result.carriedCountIn + '</span>' : '';
   let winBadge = '';
   if (result.completed) {
@@ -1165,6 +1176,14 @@ function renderHoleCard(i, round, course, comp) {
     winBadge += ' <span class="skin-badge reverse">Reverse · others +' + formatSkins(result.reverseGreenieSkins) + ' ea.</span>';
   }
   const pressOnHole = (round.presses || []).find(p => p.hole === i + 1);
+  let statusHint = '';
+  if (decided && result.winnerIds.length === 1) {
+    const wn = (STATE.players.find(p => p.id === result.winnerIds[0]) || {}).name || '?';
+    statusHint = ' · ' + escapeHtml(wn.split(' ')[0]) + ' +' + formatSkins(result.totalCountAwarded);
+  } else if (result.completed && result.carryCountAfter > 0) {
+    statusHint = ' · Carrying ' + result.carryCountAfter;
+  }
+  const chevron = isOpen ? '▾' : '▸';
   const scoreRows = round.players.map(pid => {
     const p = STATE.players.find(pl=>pl.id===pid);
     const strokes = strokesOnHole(comp.playerHcps[pid], i, course);
@@ -1180,7 +1199,7 @@ function renderHoleCard(i, round, course, comp) {
       + '<div class="score-row-strokes">' + (strokes>0?'+'+strokes:strokes||'') + '</div>'
       + '<div class="score-row-net">' + (net !== '' ? net : '—') + '</div></div>';
   }).join('');
-  div.innerHTML = '<div class="hole-card-header" onclick="toggleHole(' + i + ')"><h4>Hole ' + (i+1) + ' <span style="font-size:14px; color:rgba(245,239,224,.7); margin-left:8px;">Par ' + par + '</span></h4><div class="meta">HCP ' + hi + ' · ' + result.mult + '× ' + (pressOnHole ? '· PRESSED' : '') + '</div></div><div class="hole-card-body"><div class="score-row" style="border-bottom: 2px solid var(--masters-gold); padding-bottom:6px; margin-bottom:6px;"><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999;">Player</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Gross</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Str</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Net</div></div>' + scoreRows + (isPar3 ? renderGreenieControls(i, round, hole) : '') + ((winBadge || carriedBadge) ? '<div class="hole-result">' + carriedBadge + winBadge + '</div>' : '') + '</div>';
+  div.innerHTML = '<div class="hole-card-header" onclick="toggleHole(' + i + ')"><h4>Hole ' + (i+1) + ' <span style="font-size:14px; color:rgba(245,239,224,.7); margin-left:8px;">Par ' + par + '</span></h4><div class="hole-head-right"><div class="meta">HCP ' + hi + ' · ' + result.mult + '× ' + (pressOnHole ? '· PRESSED' : '') + statusHint + '</div><span class="hole-toggle">' + chevron + '</span></div></div><div class="hole-card-body"><div class="score-row" style="border-bottom: 2px solid var(--masters-gold); padding-bottom:6px; margin-bottom:6px;"><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999;">Player</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Gross</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Str</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Net</div></div>' + scoreRows + (isPar3 ? renderGreenieControls(i, round, hole) : '') + ((winBadge || carriedBadge) ? '<div class="hole-result">' + carriedBadge + winBadge + '</div>' : '') + '</div>';
   return div;
 }
 
@@ -1208,7 +1227,6 @@ function renderTotalsCard(round, course, comp) {
   }).join('');
   const rows = segments.map(seg => {
     const winners = comp.bonuses[seg.key] || [];        // populated only when the segment is complete for all players
-    const segComplete = winners.length > 0;
     const cells = players.map(pid => {
       const n = segNet(pid, seg.s, seg.e);
       const isWin = winners.includes(pid);
@@ -1216,20 +1234,27 @@ function renderTotalsCard(round, course, comp) {
       const val = n.entered === 0 ? '—' : (n.sum + (!n.complete ? ' *' : ''));
       return '<td class="' + cls + '">' + val + '</td>';
     }).join('');
-    let skinsCell;
-    if (!segComplete) {
-      skinsCell = '<td class="skins">pending</td>';
+    return '<tr><td class="seg">' + seg.label + '</td>' + cells + '</tr>';
+  }).join('');
+  // Skins earned per segment go BELOW the net table (as wrapping rows) so the long
+  // "+N → winner" text never spills out of the card on a phone.
+  const bonusItems = segments.map(seg => {
+    const winners = comp.bonuses[seg.key] || [];
+    let val;
+    if (!winners.length) {
+      val = '<span class="tb-pending">pending</span>';
     } else if (seg.bonus > 0) {
       const names = winners.map(pid => escapeHtml((STATE.players.find(p => p.id === pid) || {}).name || '?'));
-      skinsCell = '<td class="skins awarded">+' + formatSkins(seg.bonus) + ' → ' + names.join(', ') + (winners.length > 1 ? ' (split)' : '') + '</td>';
+      val = '<b>+' + formatSkins(seg.bonus) + '</b> ' + names.join(', ') + (winners.length > 1 ? ' (split)' : '');
     } else {
-      skinsCell = '<td class="skins">—</td>';
+      val = '—';
     }
-    return '<tr><td class="seg">' + seg.label + '</td>' + cells + skinsCell + '</tr>';
+    return '<div class="tb-item"><span class="tb-seg">' + seg.label + '</span><span class="tb-val">' + val + '</span></div>';
   }).join('');
-  div.innerHTML = '<div class="totals-card-header"><h4>Nine &amp; Round Totals</h4><div class="meta">Net strokes · skins earned · auto</div></div>'
-    + '<div class="hole-card-body"><table class="totals-table"><thead><tr><th class="seg">Net Strokes</th>' + headCells + '<th class="skins">Skins Earned</th></tr></thead><tbody>' + rows + '</tbody></table>'
-    + '<div style="font-family:Inter; font-size:10px; letter-spacing:.06em; color:#999; margin-top:10px;">Lowest net over each segment earns the bonus skins. “*” marks a segment still in progress.</div></div>';
+  div.innerHTML = '<div class="totals-card-header"><h4>Nine &amp; Round Totals</h4><div class="meta">Net strokes · read-only</div></div>'
+    + '<div class="hole-card-body"><table class="totals-table"><thead><tr><th class="seg">Net Strokes</th>' + headCells + '</tr></thead><tbody>' + rows + '</tbody></table>'
+    + '<div class="totals-bonuses-label">Skins Earned · lowest net per segment</div><div class="totals-bonuses">' + bonusItems + '</div>'
+    + '<div style="font-family:Inter; font-size:10px; letter-spacing:.06em; color:#999; margin-top:10px;">“*” marks a segment still in progress.</div></div>';
   return div;
 }
 
@@ -1243,11 +1268,30 @@ function renderGreenieControls(i, round, hole) {
   return '<div class="greenie-controls"><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--masters-green-dark); margin-bottom:6px;">Greenie (Closest to Pin, GIR)</div><label><input type="radio" name="greenie-' + i + '" value=""' + (!g || !g.playerId ? ' checked' : '') + ' onchange="setGreenie(' + i + ', null)" /> None / no one hit green</label>' + playerOpts + threePuttRow + '</div>';
 }
 
+// A hole is "active" (auto-expanded) while its skins are still in play: it's the
+// current hole to play, or it has scores in but hasn't been decided yet (a tie that
+// carries stays active). Once a hole awards skins outright it's decided → auto-collapse.
+// Future untouched holes stay collapsed too, so only live holes are open by default.
+function holeIsActive(round, i, result) {
+  const hole = round.holes[i];
+  const hasAnyScore = hole && hole.scores && Object.values(hole.scores).some(v => v != null && v !== '');
+  const decided = result.completed && result.totalCountAwarded > 0;
+  const isCurrent = (i + 1) === nextOpenHole(round);
+  return isCurrent || (hasAnyScore && !decided);
+}
+// Manual taps win: an explicit open/closed override sticks until tapped again.
+function holeIsOpen(round, i, result) {
+  const ov = round._holeOverride;
+  if (ov && Object.prototype.hasOwnProperty.call(ov, i)) return ov[i];
+  return holeIsActive(round, i, result);
+}
 function toggleHole(i) {
   if (!STATE.activeRound) return;
-  if (!(STATE.activeRound._openHoles instanceof Set)) STATE.activeRound._openHoles = new Set();
-  const set = STATE.activeRound._openHoles;
-  if (set.has(i)) set.delete(i); else set.add(i);
+  const r = STATE.activeRound;
+  const comp = computeRoundSkins(r);
+  const cur = holeIsOpen(r, i, comp.holeResults[i]);
+  if (!r._holeOverride || typeof r._holeOverride !== 'object') r._holeOverride = {};
+  r._holeOverride[i] = !cur;
   renderActiveRound();
 }
 function setScore(holeIdx, playerId, value) {
@@ -1364,7 +1408,7 @@ function startRound() {
     handicapsForRound,
     holes: Array.from({ length: 18 }, () => ({ scores: {}, greenie: null })),
     presses: [],
-    _openHoles: new Set([0])
+    _holeOverride: {}
   };
   STATE.currentTripId = tripId;
   saveState();
@@ -1376,6 +1420,7 @@ function finalizeRound() {
   showConfirm('Finalize this round and add it to the tournament ledger?', () => {
     const r = { ...STATE.activeRound };
     delete r._openHoles;
+    delete r._holeOverride;
     STATE.rounds.push(r);
     STATE.activeRound = null;
     saveState();
