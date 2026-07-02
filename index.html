@@ -142,6 +142,22 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .totals-table td.partial { color: #b0a98f; }
 .totals-table .skins, .totals-table th.skins { text-align: right; font-family: 'Inter', sans-serif; font-size: 11px; letter-spacing: 0.06em; color: var(--masters-gold); white-space: nowrap; }
 .totals-table td.skins.awarded { color: var(--masters-green-dark); font-weight: 600; }
+/* Round Summary (Live): per-player skin-type breakdown chips */
+.live-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+.live-row:last-child { border-bottom: none; }
+.live-main { flex: 1; min-width: 0; }
+.live-name { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--masters-green-dark); }
+.live-hcp { font-family: 'Inter', sans-serif; font-size: 10px; color: #888; letter-spacing: 0.1em; }
+.skin-types { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.skin-types-empty { font-family: 'Inter', sans-serif; font-size: 11px; color: #b0a98f; font-style: italic; }
+.skin-type { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px; border-radius: 2px; background: var(--masters-ivory); border: 1px solid var(--rule); color: var(--masters-green-dark); }
+.skin-type b { font-family: 'Playfair Display', serif; font-style: italic; font-size: 12px; color: var(--masters-gold); margin-left: 3px; }
+.skin-type.st-hole { border-color: var(--masters-gold); }
+.skin-type.st-greenie { background: rgba(0,103,71,0.08); border-color: var(--masters-green); }
+.skin-type.st-reverse { background: #f0eee9; border-color: #999; }
+.skin-type.st-bonus { background: rgba(201,169,97,0.12); border-color: var(--masters-gold); }
+.live-total { font-family: 'Playfair Display', serif; font-style: italic; font-weight: 700; color: var(--masters-gold); font-size: 22px; text-align: right; white-space: nowrap; display: flex; flex-direction: column; align-items: flex-end; }
+.live-total-money { font-family: 'Inter', sans-serif; font-style: normal; font-weight: 400; font-size: 10px; color: #888; letter-spacing: 0.05em; margin-top: 2px; }
 .rule-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
 .rule-item { background: var(--masters-ivory); padding: 18px; border-left: 3px solid var(--masters-gold); }
 .rule-item h4 { font-family: 'Playfair Display', serif; font-style: italic; font-weight: 600; color: var(--masters-green-dark); margin-bottom: 8px; font-size: 18px; }
@@ -915,11 +931,17 @@ function computeRoundSkins(round) {
     carryValue = newCarryValue;
   }
   const perPlayer = {};
-  round.players.forEach(pid => perPlayer[pid] = 0);
+  // breakdown[pid] decomposes a player's total into skin types (all in skin-value
+  // units, summing to perPlayer[pid]) plus a couple of counts for the live story.
+  const breakdown = {};
+  round.players.forEach(pid => {
+    perPlayer[pid] = 0;
+    breakdown[pid] = { holeSkins: 0, holesWon: 0, greenies: 0, greenieCount: 0, reverseGreenies: 0, front9: 0, back9: 0, round: 0 };
+  });
   holeResults.forEach(r => {
-    if (r.winnerIds.length === 1) perPlayer[r.winnerIds[0]] += r.totalValueAwarded;
-    if (r.greenieAwardedTo) perPlayer[r.greenieAwardedTo] += r.greenieSkins;
-    if (r.reverseGreenieFor) r.reverseGreenieFor.forEach(pid => perPlayer[pid] += r.reverseGreenieSkins);
+    if (r.winnerIds.length === 1) { perPlayer[r.winnerIds[0]] += r.totalValueAwarded; breakdown[r.winnerIds[0]].holeSkins += r.totalValueAwarded; breakdown[r.winnerIds[0]].holesWon += 1; }
+    if (r.greenieAwardedTo) { perPlayer[r.greenieAwardedTo] += r.greenieSkins; breakdown[r.greenieAwardedTo].greenies += r.greenieSkins; breakdown[r.greenieAwardedTo].greenieCount += 1; }
+    if (r.reverseGreenieFor) r.reverseGreenieFor.forEach(pid => { perPlayer[pid] += r.reverseGreenieSkins; breakdown[pid].reverseGreenies += r.reverseGreenieSkins; });
   });
   const bonuses = { front9: [], back9: [], round: [] };
   function netSum(pid, s, e) { let sum = 0; for (let i = s; i < e; i++) { if (holeResults[i].nets[pid] == null) return null; sum += holeResults[i].nets[pid]; } return sum; }
@@ -930,13 +952,13 @@ function computeRoundSkins(round) {
     const sorted = Object.entries(sums).sort((a,b) => a[1] - b[1]);
     const low = sorted[0][1];
     const winners = sorted.filter(([_,v]) => v === low).map(([pid]) => pid);
-    winners.forEach(pid => perPlayer[pid] += amt / winners.length);
+    winners.forEach(pid => { const share = amt / winners.length; perPlayer[pid] += share; breakdown[pid][key] += share; });
     bonuses[key] = winners;
   }
   awardBonus(0, 9, STATE.rules.front9Bonus, 'front9');
   awardBonus(9, 18, STATE.rules.back9Bonus, 'back9');
   awardBonus(0, 18, STATE.rules.roundBonus, 'round');
-  return { perPlayer, holeResults, bonuses, playerHcps, fullHcps };
+  return { perPlayer, breakdown, holeResults, bonuses, playerHcps, fullHcps };
 }
 
 function aggregateStandings(filterFn) {
@@ -1077,7 +1099,21 @@ function renderActiveRound() {
   $('#roundLiveStandings').innerHTML = r.players.map(pid => {
     const p = STATE.players.find(pl=>pl.id===pid);
     const todayHcp = r.handicapsForRound ? r.handicapsForRound[pid] : (p ? p.hcp : null);
-    return '<div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--rule);"><div style="font-family:Playfair Display; font-size:18px;">' + escapeHtml(p ? p.name : '?') + ' <span style="font-family:Inter; font-size:10px; color:#888; letter-spacing:.1em;">IDX ' + (todayHcp != null ? todayHcp.toFixed(1) : '—') + ' · CH ' + comp.fullHcps[pid] + ' · STROKES ' + comp.playerHcps[pid] + '</span></div><div style="font-family:Playfair Display; font-style:italic; font-weight:700; color:var(--masters-gold); font-size:20px;">' + formatSkins(comp.perPlayer[pid] || 0) + '</div></div>';
+    const total = comp.perPlayer[pid] || 0;
+    const bd = (comp.breakdown && comp.breakdown[pid]) || {};
+    const chips = [];
+    const add = (val, label, cls) => { if (val > 0.0001) chips.push('<span class="skin-type ' + cls + '">' + label + ' <b>' + formatSkins(val) + '</b></span>'); };
+    add(bd.holeSkins, bd.holesWon ? bd.holesWon + (bd.holesWon === 1 ? ' hole' : ' holes') : 'Holes', 'st-hole');
+    add(bd.greenies, bd.greenieCount ? bd.greenieCount + (bd.greenieCount === 1 ? ' greenie' : ' greenies') : 'Greenies', 'st-greenie');
+    add(bd.reverseGreenies, 'Reverse', 'st-reverse');
+    add(bd.front9, 'Front 9', 'st-bonus');
+    add(bd.back9, 'Back 9', 'st-bonus');
+    add(bd.round, 'Round', 'st-bonus');
+    const chipsHtml = chips.length ? '<div class="skin-types">' + chips.join('') + '</div>' : '<div class="skin-types skin-types-empty">No skins yet</div>';
+    return '<div class="live-row">'
+      + '<div class="live-main"><div class="live-name">' + escapeHtml(p ? p.name : '?') + ' <span class="live-hcp">IDX ' + (todayHcp != null ? todayHcp.toFixed(1) : '—') + ' · CH ' + comp.fullHcps[pid] + ' · STR ' + comp.playerHcps[pid] + '</span></div>' + chipsHtml + '</div>'
+      + '<div class="live-total">' + formatSkins(total) + '<span class="live-total-money">' + fmt$(total * STATE.rules.skinValue) + '</span></div>'
+      + '</div>';
   }).join('');
 }
 
