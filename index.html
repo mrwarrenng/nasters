@@ -158,6 +158,22 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .carry-in-banner { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; padding: 12px 14px; background: rgba(201,169,97,0.12); border: 1px solid var(--masters-gold); border-radius: 2px; font-family: 'Cormorant Garamond', serif; font-size: 16px; color: var(--masters-green-dark); cursor: pointer; }
 .carry-in-banner input { margin-top: 3px; flex-shrink: 0; }
 .carry-in-banner b { color: var(--masters-green-dark); }
+/* Per-hole press dot, playoff hole picker, press modal state, strokes grid */
+.press-dot { width: 28px; height: 28px; flex-shrink: 0; border-radius: 50%; border: 1.5px solid var(--masters-red); background: transparent; color: var(--masters-cream); font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; line-height: 1; display: flex; align-items: center; justify-content: center; touch-action: manipulation; }
+.press-dot.on { background: var(--masters-red); color: #fff; border-color: var(--masters-red); box-shadow: 0 0 0 2px rgba(139,26,26,0.25); }
+.playoff-pick { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px dashed var(--rule); }
+.playoff-pick label { margin: 0; }
+.playoff-pick select { width: auto; flex: 1; }
+.press-state { margin-top: 12px; font-weight: 600; color: var(--masters-green-dark); }
+.press-state.warn { color: var(--masters-red); }
+.strokes-grid-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.strokes-grid { border-collapse: collapse; font-family: 'Inter', sans-serif; font-size: 12px; }
+.strokes-grid th, .strokes-grid td { border: 1px solid var(--rule); padding: 5px 7px; text-align: center; min-width: 26px; }
+.strokes-grid thead th { background: var(--masters-green); color: var(--masters-cream); font-weight: 600; font-size: 11px; }
+.strokes-grid th.pname { position: sticky; left: 0; z-index: 1; background: var(--masters-ivory); text-align: left; white-space: nowrap; font-family: 'Playfair Display', serif; font-style: italic; font-size: 14px; color: var(--masters-green-dark); }
+.strokes-grid thead th.pname { background: var(--masters-green); color: var(--masters-cream); }
+.strokes-grid td.has { background: rgba(0,103,71,0.1); color: var(--masters-green-dark); font-weight: 700; }
+.strokes-grid td.total, .strokes-grid th.total { font-weight: 700; color: var(--masters-gold); background: rgba(201,169,97,0.08); }
 /* Round Summary (Live): per-player skin-type breakdown chips */
 .live-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
 .live-row:last-child { border-bottom: none; }
@@ -297,7 +313,6 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
     <div id="leaderboardBody"></div>
   </div>
   <div class="round-header-grid">
-    <div class="stat-tile"><div class="stat-tile-label">Skin Value</div><div class="stat-tile-value" id="statSkinValue">$1</div></div>
     <div class="stat-tile"><div class="stat-tile-label">Rounds Played</div><div class="stat-tile-value" id="statRoundsPlayed">0</div></div>
     <div class="stat-tile"><div class="stat-tile-label">Skins Awarded</div><div class="stat-tile-value" id="statSkinsAwarded">0</div></div>
     <div class="stat-tile"><div class="stat-tile-label">Pot in Play</div><div class="stat-tile-value" id="statPot">$0</div></div>
@@ -335,15 +350,18 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
     <h2 class="section" id="activeRoundTitle">Round in Progress</h2>
     <div class="section-rule"><span id="activeRoundSubtitle">—</span></div>
     <div class="round-header-grid">
-      <div class="stat-tile"><div class="stat-tile-label">Current Skin Value</div><div class="stat-tile-value" id="roundSkinValue">1×</div><div class="stat-tile-sub" id="roundSkinValueDollar">$1.00</div></div>
+      <div class="stat-tile"><div class="stat-tile-label">Current Skins Pot</div><div class="stat-tile-value" id="roundSkinValue">1</div><div class="stat-tile-sub" id="roundSkinValueDollar">$1.00</div></div>
       <div class="stat-tile"><div class="stat-tile-label">Presses Used</div><div class="stat-tile-value" id="roundPressCount">0 / 3</div><div class="stat-tile-sub" id="roundPressHint">No press yet</div></div>
       <div class="stat-tile"><div class="stat-tile-label">Round Skins (Live)</div><div class="stat-tile-value" id="roundSkinsLive">0</div></div>
       <div class="stat-tile"><div class="stat-tile-label">Holes Completed</div><div class="stat-tile-value" id="roundHolesDone">0 / 18</div></div>
     </div>
-    <div class="press-bar">
-      <div><div class="press-bar-title">Initiate a Press</div><div class="press-bar-meta">Only at the start of a hole · 3rd press requires back nine · use a chip to move or cancel</div></div>
-      <button class="btn btn-gold" id="pressBtn">Call the Press</button>
-      <div id="activePressList" class="press-chip-row"></div>
+    <div class="card">
+      <div class="card-header"><div class="card-title">Strokes Given</div><div class="card-meta">Net Handicap Allocation</div></div>
+      <div id="strokesGrid" class="strokes-grid-wrap"></div>
+    </div>
+    <div class="card">
+      <h3>Round Summary (Live)</h3>
+      <div id="roundLiveStandingsTop"></div>
     </div>
     <div id="holesContainer"></div>
     <div class="card">
@@ -356,6 +374,15 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
     </div>
   </div>
 </section>
+
+<div class="modal-backdrop" id="pressModal">
+  <div class="modal" style="max-width: 460px;">
+    <h3 id="pressModalTitle">Press</h3>
+    <div id="pressModalBody" class="press-modal-body"></div>
+    <div class="row-actions" id="pressModalActions" style="margin-top: 16px;"></div>
+    <button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="closeModal('pressModal')">Close</button>
+  </div>
+</div>
 
 <section class="panel" id="panel-trips">
   <h2 class="section">The Trips</h2>
@@ -897,8 +924,9 @@ function computeRoundSkins(round) {
     // Holes 19+ are playoff holes that reuse the course's holes in order (hole 19 =
     // course hole 1), continuing handicap strokes and the carry until the pot is won.
     const isPlayoff = i >= 18;
-    const courseHoleIdx = isPlayoff ? (i % 18) : i;
     const hole = (isPlayoff ? round.playoff[i - 18] : round.holes[i]) || { scores: {}, greenie: null };
+    // Playoff holes play whichever course hole the user picked (holeRef); default hole 1.
+    const courseHoleIdx = isPlayoff ? ((hole.holeRef != null) ? hole.holeRef : (i % 18)) : i;
     const par = course.pars[courseHoleIdx];
     const mult = multiplierAtHole(round, i);
     const isPar3 = par === 3;
@@ -1032,7 +1060,6 @@ function renderLeaderboard() {
   } else {
     body.innerHTML = entries.map((e, i) => '<div class="leaderboard-row"><div class="lb-rank">' + (i+1) + '</div><div><div class="lb-name">' + escapeHtml(e.player.name) + '</div><div class="lb-hcp">HCP ' + (e.player.hcp != null ? e.player.hcp.toFixed(1) : '—') + '</div></div><div></div><div><div class="lb-skins">' + formatSkins(e.skins) + '</div><div class="lb-money">' + fmt$(e.skins * STATE.rules.skinValue) + '</div></div></div>').join('');
   }
-  $('#statSkinValue').textContent = fmt$(STATE.rules.skinValue);
   const scopedRounds = STATE.rounds.filter(r => !scope.filter || scope.filter(r));
   $('#statRoundsPlayed').textContent = scopedRounds.length;
   const totalSkins = entries.reduce((s,e)=>s+e.skins, 0);
@@ -1117,29 +1144,21 @@ function renderActiveRound() {
   const trip = STATE.trips.find(t => t.id === r.tripId);
   $('#activeRoundTitle').textContent = course.name + ' — ' + r.date + (r.label ? ' · ' + r.label : '');
   $('#activeRoundSubtitle').textContent = (trip ? trip.name + ' · ' : '') + r.teeName + ' Tees · ' + r.players.length + ' Players';
-  $('#roundSkinValue').textContent = curMult + '×';
-  $('#roundSkinValueDollar').textContent = fmt$(STATE.rules.skinValue * curMult) + ' / skin';
+  // Current Skins Pot: what the active hole is worth right now — carried-in skins (at
+  // their locked value) plus this hole's base skin at the current multiplier. Excludes
+  // birdie/eagle multipliers and greenies (those depend on how the hole is played).
+  let activeIdx = comp.holeResults.findIndex(h => !h.completed);
+  if (activeIdx < 0) activeIdx = comp.holeResults.length - 1;
+  const ar = comp.holeResults[activeIdx] || { carriedCountIn: 0, carriedValueIn: 0, mult: curMult, holeNum: 1 };
+  const potCount = (ar.carriedCountIn || 0) + 1;
+  const potValue = (ar.carriedValueIn || 0) + (ar.mult || 1);
+  $('#roundSkinValue').textContent = formatSkins(potCount);
+  $('#roundSkinValueDollar').textContent = (ar.mult || 1) + '× · ' + fmt$(potValue * STATE.rules.skinValue);
   $('#roundPressCount').textContent = presses.length + ' / ' + STATE.rules.maxPresses;
   $('#roundPressHint').textContent = presses.length === 0 ? 'No press yet' : 'Last press: hole ' + presses[presses.length - 1].hole;
   $('#roundSkinsLive').textContent = formatSkins(Object.values(comp.perPlayer).reduce((s,v)=>s+v,0));
   $('#roundHolesDone').textContent = comp.holeResults.slice(0, 18).filter(h => h.completed).length + ' / 18';
-  const pressBtn = $('#pressBtn');
-  const cp = canCallPress(r);
-  pressBtn.disabled = !cp.allowed;
-  pressBtn.textContent = cp.allowed ? 'Call the Press' : cp.reason;
-  const pressList = $('#activePressList');
-  if (pressList) {
-    pressList.innerHTML = presses.length
-      ? '<span class="press-chip-label">Active presses:</span>' + presses.slice().sort((a,b) => a.hole - b.hole).map(p => {
-          let opts = '';
-          for (let hn = 1; hn <= 18; hn++) {
-            const taken = hn !== p.hole && presses.some(x => x.hole === hn);
-            opts += '<option value="' + hn + '"' + (hn === p.hole ? ' selected' : '') + (taken ? ' disabled' : '') + '>Hole ' + hn + (taken ? ' — pressed' : '') + '</option>';
-          }
-          return '<span class="press-chip"><select class="press-chip-select" aria-label="Move press to another hole" onchange="editPress(' + p.hole + ', this.value)">' + opts + '</select><button type="button" class="press-chip-x-btn" aria-label="Cancel press" title="Cancel this press" onclick="cancelPress(' + p.hole + ')">✕</button></span>';
-        }).join('')
-      : '';
-  }
+  renderStrokesGrid(r, course, comp);
   const container = $('#holesContainer');
   container.innerHTML = '';
   for (let i = 0; i < 18; i++) container.appendChild(renderHoleCard(i, r, course, comp));
@@ -1167,7 +1186,16 @@ function renderActiveRound() {
     container.appendChild(ctrl);
   }
   container.appendChild(renderTotalsCard(r, course, comp));
-  $('#roundLiveStandings').innerHTML = r.players.map(pid => {
+  const liveHtml = buildLiveStandings(r, comp);
+  $('#roundLiveStandings').innerHTML = liveHtml;
+  const topEl = $('#roundLiveStandingsTop');
+  if (topEl) topEl.innerHTML = liveHtml;
+}
+
+// Per-player live standings with the skin-type breakdown. Rendered at the top and
+// bottom of the round view (buttons only appear beneath the bottom copy).
+function buildLiveStandings(r, comp) {
+  return r.players.map(pid => {
     const p = STATE.players.find(pl=>pl.id===pid);
     const todayHcp = r.handicapsForRound ? r.handicapsForRound[pid] : (p ? p.hcp : null);
     const total = comp.perPlayer[pid] || 0;
@@ -1186,6 +1214,34 @@ function renderActiveRound() {
       + '<div class="live-total">' + formatSkins(total) + '<span class="live-total-money">' + fmt$(total * STATE.rules.skinValue) + '</span></div>'
       + '</div>';
   }).join('');
+}
+
+// Strokes-given grid: an X (or 2) on each hole a player receives strokes, with a total.
+function renderStrokesGrid(round, course, comp) {
+  const el = $('#strokesGrid');
+  if (!el) return;
+  const playoffLen = (round.playoff && round.playoff.length) || 0;
+  const n = 18 + playoffLen;
+  const chIdxOf = (i) => {
+    if (i < 18) return i;
+    const ph = round.playoff[i - 18];
+    return (ph && ph.holeRef != null) ? ph.holeRef : (i % 18);
+  };
+  let head = '<th class="pname">Player</th>';
+  for (let i = 0; i < n; i++) head += '<th>' + (i < 18 ? (i + 1) : ('P' + (i - 17))) + '</th>';
+  head += '<th class="total">Str</th>';
+  const rows = round.players.map(pid => {
+    const p = STATE.players.find(x => x.id === pid);
+    let total = 0, cells = '';
+    for (let i = 0; i < n; i++) {
+      const s = strokesOnHole(comp.playerHcps[pid], chIdxOf(i), course);
+      if (s > 0) total += s;
+      const mark = s >= 2 ? String(s) : (s === 1 ? '✕' : '');
+      cells += '<td class="' + (s > 0 ? 'has' : '') + '">' + mark + '</td>';
+    }
+    return '<tr><th class="pname">' + escapeHtml(p ? p.name : '?') + '</th>' + cells + '<td class="total">' + total + '</td></tr>';
+  }).join('');
+  el.innerHTML = '<table class="strokes-grid"><thead><tr>' + head + '</tr></thead><tbody>' + rows + '</tbody></table>';
 }
 
 function canCallPress(round) {
@@ -1216,7 +1272,7 @@ function renderHoleCard(i, round, course, comp) {
   const isPar3 = par === 3;
   const hole = holeAt(round, i) || { scores: {}, greenie: null };
   const decided = result.completed && result.totalCountAwarded > 0;
-  const isOpen = holeIsOpen(round, i, result);
+  const isOpen = holeIsOpen(round, i);
   const div = document.createElement('div');
   div.className = 'hole-card' + (isPar3 ? ' par3' : '') + (isOpen ? ' open' : '') + (decided ? ' decided' : '');
   const carriedBadge = result.carriedCountIn > 0 ? '<span class="skin-badge carried">Carried in · ' + result.carriedCountIn + '</span>' : '';
@@ -1264,7 +1320,15 @@ function renderHoleCard(i, round, course, comp) {
   }).join('');
   const title = isPlayoff ? ('Playoff ' + (i - 17)) : ('Hole ' + (i + 1));
   const parLabel = isPlayoff ? ('Par ' + par + ' · plays #' + (courseHoleIdx + 1)) : ('Par ' + par);
-  div.innerHTML = '<div class="hole-card-header" onclick="toggleHole(' + i + ')"><h4>' + title + ' <span style="font-size:14px; color:rgba(245,239,224,.7); margin-left:8px;">' + parLabel + '</span></h4><div class="hole-head-right"><div class="meta">HCP ' + hi + ' · ' + result.mult + '× ' + (pressOnHole ? '· PRESSED' : '') + statusHint + '</div><span class="hole-toggle">' + chevron + '</span></div></div><div class="hole-card-body"><div class="score-row" style="border-bottom: 2px solid var(--masters-gold); padding-bottom:6px; margin-bottom:6px;"><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999;">Player</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Gross</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Str</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Net</div></div>' + scoreRows + ((isPar3 && !isPlayoff) ? renderGreenieControls(i, round, hole) : '') + ((winBadge || carriedBadge) ? '<div class="hole-result">' + carriedBadge + winBadge + '</div>' : '') + '</div>';
+  const pressed = !!pressOnHole;
+  const pressDot = isPlayoff ? '' : '<button type="button" class="press-dot' + (pressed ? ' on' : '') + '" title="Press this hole" onclick="event.stopPropagation(); openPressModal(' + (i + 1) + ')">P</button>';
+  let playoffPicker = '';
+  if (isPlayoff) {
+    let o = '';
+    for (let hn = 1; hn <= 18; hn++) o += '<option value="' + (hn - 1) + '"' + ((hn - 1) === courseHoleIdx ? ' selected' : '') + '>Hole ' + hn + ' · par ' + course.pars[hn - 1] + '</option>';
+    playoffPicker = '<div class="playoff-pick"><label>Playoff plays</label><select onchange="setPlayoffHoleRef(' + (i - 18) + ', this.value)">' + o + '</select></div>';
+  }
+  div.innerHTML = '<div class="hole-card-header" onclick="toggleHole(' + i + ')"><h4>' + title + ' <span style="font-size:14px; color:rgba(245,239,224,.7); margin-left:8px;">' + parLabel + '</span></h4><div class="hole-head-right"><div class="meta">HCP ' + hi + ' · ' + result.mult + '× ' + (pressOnHole ? '· PRESSED' : '') + statusHint + '</div>' + pressDot + '<span class="hole-toggle">' + chevron + '</span></div></div><div class="hole-card-body">' + playoffPicker + '<div class="score-row" style="border-bottom: 2px solid var(--masters-gold); padding-bottom:6px; margin-bottom:6px;"><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999;">Player</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Gross</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Str</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Net</div></div>' + scoreRows + ((isPar3 && !isPlayoff) ? renderGreenieControls(i, round, hole) : '') + ((winBadge || carriedBadge) ? '<div class="hole-result">' + carriedBadge + winBadge + '</div>' : '') + '</div>';
   return div;
 }
 
@@ -1348,32 +1412,16 @@ function ensureHoleAt(round, i) {
   if (!round.holes[i]) round.holes[i] = { scores: {}, greenie: null };
   return round.holes[i];
 }
-// A hole is "active" (auto-expanded) while its skins are still in play: it's the
-// current hole to play, or it has scores in but hasn't been decided yet (a tie that
-// carries stays active). Once a hole awards skins outright it's decided → auto-collapse.
-// Future untouched holes stay collapsed too, so only live holes are open by default.
-// Playoff holes stay open until decided (they exist only to resolve a live carry).
-function holeIsActive(round, i, result) {
-  const hole = holeAt(round, i);
-  const hasAnyScore = hole && hole.scores && Object.values(hole.scores).some(v => v != null && v !== '');
-  const decided = result.completed && result.totalCountAwarded > 0;
-  if (i >= 18) return !decided;
-  const isCurrent = (i + 1) === nextOpenHole(round);
-  return isCurrent || (hasAnyScore && !decided);
-}
-// Manual taps win: an explicit open/closed override sticks until tapped again.
-function holeIsOpen(round, i, result) {
-  const ov = round._holeOverride;
-  if (ov && Object.prototype.hasOwnProperty.call(ov, i)) return ov[i];
-  return holeIsActive(round, i, result);
+// Open/closed is fully user-controlled (no auto-collapse). A hole is open only if the
+// user opened it; hole 1 (and any newly added playoff hole) starts open for convenience.
+function holeIsOpen(round, i) {
+  return !!(round._holeOverride && round._holeOverride[i]);
 }
 function toggleHole(i) {
   if (!STATE.activeRound) return;
   const r = STATE.activeRound;
-  const comp = computeRoundSkins(r);
-  const cur = holeIsOpen(r, i, comp.holeResults[i]);
   if (!r._holeOverride || typeof r._holeOverride !== 'object') r._holeOverride = {};
-  r._holeOverride[i] = !cur;
+  r._holeOverride[i] = !r._holeOverride[i];
   renderActiveRound();
 }
 function setScore(holeIdx, playerId, value) {
@@ -1424,24 +1472,78 @@ function setThreePutt(holeIdx, checked) {
   renderActiveRound();
   renderLeaderboard();
 }
-function callPress() {
-  if (!STATE.activeRound) return;
-  const check = canCallPress(STATE.activeRound);
-  if (!check.allowed) { showToast(check.reason); return; }
-  STATE.activeRound.presses = STATE.activeRound.presses || [];
-  STATE.activeRound.presses.push({ hole: check.hole, ts: Date.now() });
+// Per-hole press: the (P) dot on each hole opens this modal, which explains the rule
+// and offers to initiate or cancel a press on that specific hole.
+function pressStatusForHole(round, holeNum) {
+  const presses = round.presses || [];
+  if (presses.some(p => p.hole === holeNum)) return { pressed: true, allowed: false };
+  if (presses.length >= STATE.rules.maxPresses) return { pressed: false, allowed: false, reason: 'Max presses reached (' + STATE.rules.maxPresses + ').' };
+  const isLast = (presses.length + 1) === STATE.rules.maxPresses;
+  if (isLast && holeNum < STATE.rules.finalPressHole) return { pressed: false, allowed: false, reason: 'The final press must be on hole ' + STATE.rules.finalPressHole + ' or later.' };
+  return { pressed: false, allowed: true };
+}
+function openPressModal(holeNum) {
+  const r = STATE.activeRound;
+  if (!r) return;
+  const st = pressStatusForHole(r, holeNum);
+  const style = STATE.rules.pressStyle === 'double' ? 'doubles' : 'adds one skin to';
+  $('#pressModalTitle').textContent = 'Press · Hole ' + holeNum;
+  $('#pressModalBody').innerHTML =
+    '<p>A press ' + style + ' the skin value from this hole onward — earlier holes keep their value. '
+    + 'Up to ' + STATE.rules.maxPresses + ' presses per round; the final press must be on hole ' + STATE.rules.finalPressHole + ' or later.</p>'
+    + (st.pressed ? '<p class="press-state on">● A press is active on hole ' + holeNum + '.</p>'
+      : st.allowed ? '<p class="press-state">No press on hole ' + holeNum + ' yet.</p>'
+      : '<p class="press-state warn">✕ ' + st.reason + '</p>');
+  const actions = $('#pressModalActions');
+  if (st.pressed) actions.innerHTML = '<button class="btn btn-danger" onclick="cancelPressAt(' + holeNum + ')">Cancel Press on Hole ' + holeNum + '</button>';
+  else if (st.allowed) actions.innerHTML = '<button class="btn btn-gold" onclick="callPressOnHole(' + holeNum + ')">Call Press on Hole ' + holeNum + '</button>';
+  else actions.innerHTML = '';
+  openModal('pressModal');
+}
+function callPressOnHole(holeNum) {
+  const r = STATE.activeRound;
+  if (!r) return;
+  const st = pressStatusForHole(r, holeNum);
+  if (st.pressed || !st.allowed) { showToast(st.reason || 'Cannot press this hole.'); return; }
+  r.presses = r.presses || [];
+  r.presses.push({ hole: holeNum, ts: Date.now() });
   saveState();
-  showToast('Press called on hole ' + check.hole + '!');
+  closeModal('pressModal');
+  showToast('Press called on hole ' + holeNum + '.');
+  renderActiveRound();
+  renderLeaderboard();
+}
+function cancelPressAt(holeNum) {
+  const r = STATE.activeRound;
+  if (!r) return;
+  r.presses = (r.presses || []).filter(p => p.hole !== holeNum);
+  saveState();
+  closeModal('pressModal');
+  showToast('Press on hole ' + holeNum + ' cancelled.');
   renderActiveRound();
   renderLeaderboard();
 }
 // Extra "playoff" holes (19+) to keep playing until a carried pot is won.
 function addPlayoffHole() {
   if (!STATE.activeRound) return;
-  STATE.activeRound.playoff = STATE.activeRound.playoff || [];
-  STATE.activeRound.playoff.push({ scores: {}, greenie: null });
+  const r = STATE.activeRound;
+  r.playoff = r.playoff || [];
+  r.playoff.push({ scores: {}, greenie: null, holeRef: 0 });
+  if (!r._holeOverride || typeof r._holeOverride !== 'object') r._holeOverride = {};
+  r._holeOverride[18 + r.playoff.length - 1] = true;   // open the new playoff card
   saveState();
-  showToast('Playoff hole added — plays as hole ' + (((STATE.activeRound.playoff.length - 1) % 18) + 1) + '.');
+  showToast('Playoff hole added — pick which hole it plays.');
+  renderActiveRound();
+  renderLeaderboard();
+}
+function setPlayoffHoleRef(playoffIdx, ref) {
+  if (!STATE.activeRound || !STATE.activeRound.playoff) return;
+  const h = STATE.activeRound.playoff[playoffIdx];
+  if (!h) return;
+  const v = parseInt(ref, 10);
+  if (isNaN(v) || v < 0 || v > 17) return;
+  h.holeRef = v;
+  saveState();
   renderActiveRound();
   renderLeaderboard();
 }
@@ -1457,36 +1559,6 @@ function removePlayoffHole() {
     renderLeaderboard();
   });
 }
-function cancelPress(hole) {
-  if (!STATE.activeRound) return;
-  const presses = STATE.activeRound.presses || [];
-  if (!presses.some(p => p.hole === hole)) return;
-  showConfirm('Cancel the press called on hole ' + hole + '? Skin values recalculate immediately.', () => {
-    STATE.activeRound.presses = (STATE.activeRound.presses || []).filter(p => p.hole !== hole);
-    saveState();
-    showToast('Press on hole ' + hole + ' cancelled.');
-    renderActiveRound();
-    renderLeaderboard();
-  });
-}
-// Move an already-called press to a different hole, in case it was logged on the
-// wrong one. Any empty hole 1–18 is allowed; skins recalculate immediately.
-function editPress(oldHole, newHoleRaw) {
-  if (!STATE.activeRound) return;
-  const presses = STATE.activeRound.presses || [];
-  const p = presses.find(x => x.hole === oldHole);
-  if (!p) return;
-  const newHole = parseInt(newHoleRaw, 10);
-  if (isNaN(newHole) || newHole < 1 || newHole > 18) { showToast('Pick a hole 1–18'); renderActiveRound(); return; }
-  if (newHole === oldHole) return;
-  if (presses.some(x => x.hole === newHole)) { showToast('Hole ' + newHole + ' already has a press'); renderActiveRound(); return; }
-  p.hole = newHole;
-  saveState();
-  showToast('Press moved to hole ' + newHole + '.');
-  renderActiveRound();
-  renderLeaderboard();
-}
-
 function startRound() {
   const tripId = $('#newRoundTrip').value;
   const courseId = $('#newRoundCourse').value;
@@ -1514,7 +1586,7 @@ function startRound() {
     holes: Array.from({ length: 18 }, () => ({ scores: {}, greenie: null })),
     playoff: [],
     presses: [],
-    _holeOverride: {}
+    _holeOverride: { 0: true }
   };
   // Carry an unresolved pot from the previous round into this one, if opted in.
   const carryChk = $('#carryInChk');
@@ -1618,7 +1690,7 @@ function finalizeTrip(id) {
       standings: entries.map(e => ({ pid: e.pid, name: e.name, skins: e.skins }))
     };
     saveState();
-    showToast(trip.name + ' finalized — ' + champion.name + ' takes the Green Pinstripe.');
+    showToast(trip.name + ' finalized — ' + champion.name + ' is Champion.');
     renderAll();
     switchPanel('hall');
   });
@@ -1851,10 +1923,10 @@ function renderHall() {
 
 function hallBlock(o) {
   const sv = o.skinValue != null ? o.skinValue : STATE.rules.skinValue;
-  const winnerHTML = '<div class="hall-prize winner"><div class="hall-prize-label">★ Champion · The Green Pinstripe ★</div><div class="hall-prize-name">' + escapeHtml(o.champion.name) + '</div><div class="hall-prize-stat">' + formatSkins(o.champion.skins) + ' skins · ' + fmt$(o.champion.skins * sv) + '</div></div>';
+  const winnerHTML = '<div class="hall-prize winner"><div class="hall-prize-label">★ Champion ★</div><div class="hall-prize-name">' + escapeHtml(o.champion.name) + '</div><div class="hall-prize-stat">' + formatSkins(o.champion.skins) + ' skins · ' + fmt$(o.champion.skins * sv) + '</div></div>';
   const loserHTML = o.monkey
-    ? '<div class="hall-prize loser"><div class="hall-prize-label">Wooden Spoon · Bottom of the Field</div><div class="hall-prize-name">' + escapeHtml(o.monkey.name) + '</div><div class="hall-prize-stat">' + formatSkins(o.monkey.skins) + ' skins · ' + fmt$(o.monkey.skins * sv) + '</div><div class="monkey-curse"><strong>🐵 THE MONKEY BUTT 🐵</strong>Hereby cursed to bag the Monkey Butt head cover for ' + escapeHtml(o.name) + '. May the embarrassment fuel next trip\'s redemption.</div></div>'
-    : '<div class="hall-prize loser"><div class="hall-prize-label">Monkey Butt</div><div class="hall-prize-name" style="font-size:24px;">—</div><div class="hall-prize-stat">Needs 2+ players</div></div>';
+    ? '<div class="hall-prize loser"><div class="hall-prize-label">The Monkey Butt</div><div class="hall-prize-name">' + escapeHtml(o.monkey.name) + '</div><div class="hall-prize-stat">' + formatSkins(o.monkey.skins) + ' skins · ' + fmt$(o.monkey.skins * sv) + '</div><div class="monkey-curse"><strong>🐵 THE MONKEY BUTT 🐵</strong>Hereby cursed to bag the Monkey Butt head cover for ' + escapeHtml(o.name) + '. May the embarrassment fuel next trip\'s redemption.</div></div>'
+    : '<div class="hall-prize loser"><div class="hall-prize-label">The Monkey Butt</div><div class="hall-prize-name" style="font-size:24px;">—</div><div class="hall-prize-stat">Needs 2+ players</div></div>';
   const rows = o.standings.map((e, i) => '<tr><td class="name">' + (i+1) + '. ' + escapeHtml(e.name) + '</td><td class="skins">' + formatSkins(e.skins) + '</td></tr>').join('');
   const tableHTML = o.standings.length ? '<table class="hall-detail-table"><thead><tr><td class="name" style="color:rgba(245,239,224,.5); font-size:10px; letter-spacing:.2em; text-transform:uppercase;">Player</td><td class="skins" style="color:rgba(245,239,224,.5); font-size:10px; letter-spacing:.2em; text-transform:uppercase;">Trip Skins</td></tr></thead><tbody>' + rows + '</tbody></table>' : '';
   return '<div class="hall-year"><div class="hall-year-label">' + escapeHtml(o.name) + (o.inProgress ? ' · In Progress' : '') + '</div><div class="hall-year-num">' + escapeHtml(o.yearNum) + '</div><div style="font-family:Cormorant Garamond; font-style:italic; color:rgba(245,239,224,.7); margin-bottom: 16px;">' + escapeHtml(o.sub) + '</div><div class="hall-podium">' + winnerHTML + loserHTML + '</div>' + tableHTML + '</div>';
@@ -1950,7 +2022,6 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#addTripBtn').addEventListener('click', addTrip);
   $('#saveRulesBtn').addEventListener('click', saveRules);
   $('#resetRulesBtn').addEventListener('click', resetRules);
-  $('#pressBtn').addEventListener('click', callPress);
   $('#finalizeRoundBtn').addEventListener('click', finalizeRound);
   $('#cancelRoundBtn').addEventListener('click', cancelRound);
   $('#leaderboardScope').addEventListener('change', renderLeaderboard);
