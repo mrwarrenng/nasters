@@ -1576,8 +1576,61 @@ function renderTrips() {
     const agg = aggregateStandings(r => r.tripId === t.id);
     const leader = Object.entries(agg).sort((a,b)=>b[1]-a[1])[0];
     const leaderName = leader && leader[1] > 0 ? (STATE.players.find(p=>p.id===leader[0])||{}).name : '—';
-    return '<div class="trip-card ' + (isCurrent ? 'trip-current' : '') + '"><h4>' + escapeHtml(t.name) + '</h4><div class="meta">' + escapeHtml(t.start || '—') + ' → ' + escapeHtml(t.end || '—') + ' · ' + tripRounds.length + ' round(s) · Leader: ' + escapeHtml(leaderName) + '</div><div style="margin-top: 12px;" class="row-actions">' + (isCurrent ? '<span class="skin-badge">Current Trip</span>' : '<button class="btn btn-ghost btn-sm" onclick="setCurrentTrip(\'' + t.id + '\')">Set as Current</button>') + '<button class="btn btn-danger btn-sm" onclick="deleteTrip(\'' + t.id + '\')">Delete</button></div></div>';
+    const fin = t.finalized;
+    const finBadge = fin ? '<span class="skin-badge" style="background:var(--masters-gold);">🏆 Finalized · ' + escapeHtml((STATE.players.find(p=>p.id===fin.championId)||{}).name || '?') + '</span>' : '';
+    const finBtn = fin
+      ? '<button class="btn btn-ghost btn-sm" onclick="unfinalizeTrip(\'' + t.id + '\')">Un-finalize</button>'
+      : '<button class="btn btn-gold btn-sm" onclick="finalizeTrip(\'' + t.id + '\')">Finalize Trip</button>';
+    return '<div class="trip-card ' + (isCurrent ? 'trip-current' : '') + '"><h4>' + escapeHtml(t.name) + ' ' + finBadge + '</h4><div class="meta">' + escapeHtml(t.start || '—') + ' → ' + escapeHtml(t.end || '—') + ' · ' + tripRounds.length + ' round(s) · Leader: ' + escapeHtml(leaderName) + '</div><div style="margin-top: 12px;" class="row-actions">' + (isCurrent ? '<span class="skin-badge">Current Trip</span>' : '<button class="btn btn-ghost btn-sm" onclick="setCurrentTrip(\'' + t.id + '\')">Set as Current</button>') + finBtn + '<button class="btn btn-danger btn-sm" onclick="deleteTrip(\'' + t.id + '\')">Delete</button></div></div>';
   }).join('');
+}
+
+// Aggregate a trip's recorded rounds into sorted standings for its participants.
+function tripStandings(tripId) {
+  const agg = {}; const participants = new Set();
+  STATE.rounds.filter(r => r.tripId === tripId).forEach(r => {
+    (r.players || []).forEach(pid => participants.add(pid));
+    const comp = computeRoundSkins(r);
+    Object.entries(comp.perPlayer).forEach(([pid, v]) => { agg[pid] = (agg[pid] || 0) + v; });
+  });
+  return Array.from(participants)
+    .map(pid => ({ pid, name: (STATE.players.find(p => p.id === pid) || {}).name || '?', skins: agg[pid] || 0 }))
+    .sort((a, b) => b.skins - a.skins);
+}
+
+// Finalize a trip: snapshot its Champion, Monkey Butt and full standings into the
+// Hall of Fame & Shame. This is what enshrines history (the Hall is trip-based).
+function finalizeTrip(id) {
+  const trip = STATE.trips.find(t => t.id === id);
+  if (!trip) return;
+  const entries = tripStandings(id);
+  if (entries.length === 0) { showToast('No recorded rounds for this trip yet — finalize a round first.'); return; }
+  const roundsCount = STATE.rounds.filter(r => r.tripId === id).length;
+  showConfirm('Finalize “' + trip.name + '”? This records its Champion and Monkey Butt to the Hall. You can un-finalize later to amend.', () => {
+    const champion = entries[0];
+    const monkey = entries.length > 1 ? entries[entries.length - 1] : null;
+    trip.finalized = {
+      at: new Date().toISOString().slice(0, 10),
+      skinValue: STATE.rules.skinValue,
+      roundsCount,
+      championId: champion.pid,
+      monkeyButtId: monkey ? monkey.pid : null,
+      standings: entries.map(e => ({ pid: e.pid, name: e.name, skins: e.skins }))
+    };
+    saveState();
+    showToast(trip.name + ' finalized — ' + champion.name + ' takes the Green Pinstripe.');
+    renderAll();
+    switchPanel('hall');
+  });
+}
+function unfinalizeTrip(id) {
+  const trip = STATE.trips.find(t => t.id === id);
+  if (!trip || !trip.finalized) return;
+  showConfirm('Un-finalize “' + trip.name + '”? It will be removed from the Hall until finalized again.', () => {
+    delete trip.finalized;
+    saveState();
+    renderAll();
+  });
 }
 
 function addTrip() {
@@ -1755,42 +1808,56 @@ function setTeeYards(courseId, teeIdx, val) {
   renderAll();
 }
 
+// The Hall is driven by FINALIZED TRIPS (see finalizeTrip), not by year aggregates.
 function renderHall() {
   const container = $('#hallContent');
-  const years = new Set();
-  STATE.rounds.forEach(r => { if (r.date) years.add(r.date.slice(0,4)); });
-  const currentYear = new Date().getFullYear().toString();
-  years.add(currentYear);
-  const yearList = Array.from(years).sort((a,b) => b.localeCompare(a));
-  if (STATE.players.length === 0) { container.innerHTML = '<div class="empty-state">Hall populates once players are added and rounds played.</div>'; return; }
+  const blocks = [];
 
-  container.innerHTML = yearList.map(year => {
-    const yearRounds = STATE.rounds.filter(r => (r.date || '').startsWith(year));
-    const agg = {};
-    STATE.players.forEach(p => agg[p.id] = 0);
-    yearRounds.forEach(r => {
-      const comp = computeRoundSkins(r);
-      Object.entries(comp.perPlayer).forEach(([pid, v]) => { if (agg[pid] != null) agg[pid] += v; });
-    });
-    const entries = Object.entries(agg).map(([pid, skins]) => ({ pid, skins, player: STATE.players.find(p=>p.id===pid) })).filter(e => e.player).sort((a,b) => b.skins - a.skins);
-    const hasResults = yearRounds.length > 0 && entries.some(e => e.skins > 0);
-    const isInProgress = year === currentYear && (STATE.activeRound || yearRounds.length > 0);
-
-    let winnerHTML, loserHTML;
-    if (hasResults) {
-      const winner = entries[0];
-      const loser = entries[entries.length - 1];
-      winnerHTML = '<div class="hall-prize winner"><div class="hall-prize-label">★ Champion · The Green Pinstripe ★</div><div class="hall-prize-name">' + escapeHtml(winner.player.name) + '</div><div class="hall-prize-stat">' + formatSkins(winner.skins) + ' skins · ' + fmt$(winner.skins * STATE.rules.skinValue) + '</div></div>';
-      loserHTML = '<div class="hall-prize loser"><div class="hall-prize-label">Wooden Spoon · Bottom of the Field</div><div class="hall-prize-name">' + escapeHtml(loser.player.name) + '</div><div class="hall-prize-stat">' + formatSkins(loser.skins) + ' skins · ' + fmt$(loser.skins * STATE.rules.skinValue) + '</div><div class="monkey-curse"><strong>🐵 THE MONKEY BUTT 🐵</strong>Hereby cursed to bag the Monkey Butt head cover for all of ' + escapeHtml(year) + '. May the embarrassment fuel next year\'s redemption.</div></div>';
-    } else {
-      winnerHTML = '<div class="hall-prize winner"><div class="hall-prize-label">★ Champion</div><div class="hall-prize-name" style="font-size:24px;">TBD</div><div class="hall-prize-stat">Play rounds to crown</div></div>';
-      loserHTML = '<div class="hall-prize loser"><div class="hall-prize-label">Monkey Butt</div><div class="hall-prize-name" style="font-size:24px;">TBD</div><div class="hall-prize-stat">Someone must finish last</div></div>';
+  // Teaser: the current trip, not yet finalized, shown live so it's clear what's at stake.
+  const curTrip = STATE.trips.find(t => t.id === STATE.currentTripId);
+  if (curTrip && !curTrip.finalized) {
+    const entries = tripStandings(curTrip.id);
+    if (entries.length && entries.some(e => e.skins > 0)) {
+      const rounds = STATE.rounds.filter(r => r.tripId === curTrip.id).length;
+      blocks.push(hallBlock({
+        name: curTrip.name, yearNum: ((curTrip.start || '').slice(0,4)) || '—',
+        sub: rounds + ' round' + (rounds === 1 ? '' : 's') + ' · In Progress — Finalize in the Trips tab to enshrine',
+        inProgress: true, champion: entries[0], monkey: entries.length > 1 ? entries[entries.length - 1] : null,
+        standings: entries, skinValue: STATE.rules.skinValue
+      }));
     }
-    const tableRows = entries.length ? entries.map((e, i) => '<tr><td class="name">' + (i+1) + '. ' + escapeHtml(e.player.name) + '</td><td class="skins">' + formatSkins(e.skins) + '</td></tr>').join('') : '';
-    const tableHTML = entries.length ? '<table class="hall-detail-table"><thead><tr><td class="name" style="color:rgba(245,239,224,.5); font-size:10px; letter-spacing:.2em; text-transform:uppercase;">Player</td><td class="skins" style="color:rgba(245,239,224,.5); font-size:10px; letter-spacing:.2em; text-transform:uppercase;">' + year + ' Skins</td></tr></thead><tbody>' + tableRows + '</tbody></table>' : '';
+  }
 
-    return '<div class="hall-year"><div class="hall-year-label">The Annals of the WJZ Nasters' + (isInProgress ? ' · In Progress' : '') + '</div><div class="hall-year-num">' + escapeHtml(year) + '</div><div style="font-family:Cormorant Garamond; font-style:italic; color:rgba(245,239,224,.7); margin-bottom: 16px;">' + yearRounds.length + ' round' + (yearRounds.length===1?'':'s') + ' contested</div><div class="hall-podium">' + winnerHTML + loserHTML + '</div>' + tableHTML + '</div>';
-  }).join('');
+  // Finalized trips, most recent first.
+  STATE.trips.filter(t => t.finalized).sort((a,b) =>
+    (b.finalized.at || '').localeCompare(a.finalized.at || '') || (b.start || '').localeCompare(a.start || '')
+  ).forEach(t => {
+    const f = t.finalized;
+    const champ = f.standings.find(s => s.pid === f.championId) || { name: '?', skins: 0 };
+    const monkey = f.monkeyButtId ? (f.standings.find(s => s.pid === f.monkeyButtId) || { name: '?', skins: 0 }) : null;
+    blocks.push(hallBlock({
+      name: t.name, yearNum: ((t.start || f.at || '').slice(0,4)) || '—',
+      sub: f.roundsCount + ' round' + (f.roundsCount === 1 ? '' : 's') + ' · Finalized ' + f.at,
+      inProgress: false, champion: champ, monkey, standings: f.standings, skinValue: f.skinValue
+    }));
+  });
+
+  if (!blocks.length) {
+    container.innerHTML = '<div class="empty-state">No trips enshrined yet. Play a trip\'s rounds, then hit <strong>Finalize Trip</strong> in the Trips tab to crown its Champion and curse its Monkey Butt here.</div>';
+    return;
+  }
+  container.innerHTML = blocks.join('');
+}
+
+function hallBlock(o) {
+  const sv = o.skinValue != null ? o.skinValue : STATE.rules.skinValue;
+  const winnerHTML = '<div class="hall-prize winner"><div class="hall-prize-label">★ Champion · The Green Pinstripe ★</div><div class="hall-prize-name">' + escapeHtml(o.champion.name) + '</div><div class="hall-prize-stat">' + formatSkins(o.champion.skins) + ' skins · ' + fmt$(o.champion.skins * sv) + '</div></div>';
+  const loserHTML = o.monkey
+    ? '<div class="hall-prize loser"><div class="hall-prize-label">Wooden Spoon · Bottom of the Field</div><div class="hall-prize-name">' + escapeHtml(o.monkey.name) + '</div><div class="hall-prize-stat">' + formatSkins(o.monkey.skins) + ' skins · ' + fmt$(o.monkey.skins * sv) + '</div><div class="monkey-curse"><strong>🐵 THE MONKEY BUTT 🐵</strong>Hereby cursed to bag the Monkey Butt head cover for ' + escapeHtml(o.name) + '. May the embarrassment fuel next trip\'s redemption.</div></div>'
+    : '<div class="hall-prize loser"><div class="hall-prize-label">Monkey Butt</div><div class="hall-prize-name" style="font-size:24px;">—</div><div class="hall-prize-stat">Needs 2+ players</div></div>';
+  const rows = o.standings.map((e, i) => '<tr><td class="name">' + (i+1) + '. ' + escapeHtml(e.name) + '</td><td class="skins">' + formatSkins(e.skins) + '</td></tr>').join('');
+  const tableHTML = o.standings.length ? '<table class="hall-detail-table"><thead><tr><td class="name" style="color:rgba(245,239,224,.5); font-size:10px; letter-spacing:.2em; text-transform:uppercase;">Player</td><td class="skins" style="color:rgba(245,239,224,.5); font-size:10px; letter-spacing:.2em; text-transform:uppercase;">Trip Skins</td></tr></thead><tbody>' + rows + '</tbody></table>' : '';
+  return '<div class="hall-year"><div class="hall-year-label">' + escapeHtml(o.name) + (o.inProgress ? ' · In Progress' : '') + '</div><div class="hall-year-num">' + escapeHtml(o.yearNum) + '</div><div style="font-family:Cormorant Garamond; font-style:italic; color:rgba(245,239,224,.7); margin-bottom: 16px;">' + escapeHtml(o.sub) + '</div><div class="hall-podium">' + winnerHTML + loserHTML + '</div>' + tableHTML + '</div>';
 }
 
 function renderRules() {
