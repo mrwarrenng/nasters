@@ -152,6 +152,12 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .tb-val { font-family: 'Cormorant Garamond', serif; font-size: 15px; color: #444; text-align: right; min-width: 0; overflow-wrap: anywhere; }
 .tb-val b { font-family: 'Playfair Display', serif; font-style: italic; color: var(--masters-gold); font-size: 17px; margin-right: 4px; }
 .tb-pending { color: #b0a98f; font-style: italic; }
+/* Extra playoff-hole controls + carry-forward banner */
+.playoff-control { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 4px 0 16px; padding: 14px; background: rgba(201,169,97,0.1); border: 1px dashed var(--masters-gold); border-radius: 2px; }
+.playoff-note { width: 100%; font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 16px; color: var(--masters-green-dark); }
+.carry-in-banner { display: flex; align-items: flex-start; gap: 8px; margin-top: 14px; padding: 12px 14px; background: rgba(201,169,97,0.12); border: 1px solid var(--masters-gold); border-radius: 2px; font-family: 'Cormorant Garamond', serif; font-size: 16px; color: var(--masters-green-dark); cursor: pointer; }
+.carry-in-banner input { margin-top: 3px; flex-shrink: 0; }
+.carry-in-banner b { color: var(--masters-green-dark); }
 /* Round Summary (Live): per-player skin-type breakdown chips */
 .live-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
 .live-row:last-child { border-bottom: none; }
@@ -317,6 +323,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
         <div id="newRoundPlayerList"></div>
         <div class="helper">Override each player's index for today. GHIN updates daily — use today's number.</div>
       </div>
+      <div id="carryInBanner"></div>
       <div class="row-actions" style="margin-top: 14px;">
         <button class="btn btn-primary" id="startRoundBtn">Start Round</button>
         <button class="btn btn-ghost" onclick="switchPanel('players')">Manage Players</button>
@@ -394,7 +401,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
   <div class="card">
     <h3>Add a Course</h3>
     <div class="field"><label>Course Name</label><input type="text" id="newCourseName" placeholder="e.g. Scotts Bluff Country Club" /></div>
-    <div class="field"><label>Tees (Name / Rating / Slope) — one per line</label><textarea id="newCourseTees" rows="4" placeholder="Blue / 71.2 / 132&#10;White / 69.4 / 126&#10;Gold / 67.1 / 119"></textarea><div class="helper">Format: Tee Name / Course Rating / Slope</div></div>
+    <div class="field"><label>Tees (Name / Rating / Slope / Yards) — one per line</label><textarea id="newCourseTees" rows="4" placeholder="Blue / 71.2 / 132 / 6842&#10;White / 69.4 / 126 / 6421&#10;Gold / 67.1 / 119 / 5980"></textarea><div class="helper">Format: Tee Name / Course Rating / Slope / Yards (yards optional — you can also add it later per tee)</div></div>
     <div class="field"><label>Par by Hole (18 numbers)</label><input type="text" id="newCoursePars" placeholder="4 4 3 5 4 4 3 4 5 4 4 5 3 4 4 4 3 5" /></div>
     <div class="field"><label>Handicap Index by Hole (1-18)</label><input type="text" id="newCourseHcps" placeholder="7 1 15 5 11 3 17 9 13 8 2 16 6 12 4 18 10 14" /></div>
     <button class="btn btn-primary" id="addCourseBtn">Add Course</button>
@@ -881,11 +888,18 @@ function computeRoundSkins(round) {
   // carryCount = number of skins carried forward; carryValue = their total worth in
   // skin-value units, with each carried skin LOCKED at the multiplier of the hole it was
   // won on. A later press never lifts the value of skins carried from earlier holes.
-  let carryCount = 0;
-  let carryValue = 0;
-  for (let i = 0; i < 18; i++) {
-    const hole = round.holes[i] || { scores: {}, greenie: null };
-    const par = course.pars[i];
+  // Skins may be carried IN from a prior round (carry-forward on finalize), locked at
+  // the value they were worth when they last carried.
+  let carryCount = (round.carryIn && round.carryIn.count) || 0;
+  let carryValue = (round.carryIn && round.carryIn.value) || 0;
+  const playoffHoles = (round.playoff && round.playoff.length) || 0;
+  for (let i = 0; i < 18 + playoffHoles; i++) {
+    // Holes 19+ are playoff holes that reuse the course's holes in order (hole 19 =
+    // course hole 1), continuing handicap strokes and the carry until the pot is won.
+    const isPlayoff = i >= 18;
+    const courseHoleIdx = isPlayoff ? (i % 18) : i;
+    const hole = (isPlayoff ? round.playoff[i - 18] : round.holes[i]) || { scores: {}, greenie: null };
+    const par = course.pars[courseHoleIdx];
     const mult = multiplierAtHole(round, i);
     const isPar3 = par === 3;
     const nets = {};
@@ -893,7 +907,7 @@ function computeRoundSkins(round) {
     round.players.forEach(pid => {
       const gross = hole.scores ? hole.scores[pid] : null;
       if (gross == null || gross === '') allEntered = false;
-      else nets[pid] = gross - strokesOnHole(playerHcps[pid], i, course);
+      else nets[pid] = gross - strokesOnHole(playerHcps[pid], courseHoleIdx, course);
     });
     const carriedCountIn = carryCount, carriedValueIn = carryValue;
     let winnerIds = [], birdieTag = null;
@@ -925,14 +939,14 @@ function computeRoundSkins(round) {
       }
     }
     let greenieAwardedTo = null, reverseGreenieFor = [], greenieSkins = 0, reverseGreenieSkins = 0;
-    if (isPar3 && hole.greenie) {
+    if (isPar3 && !isPlayoff && hole.greenie) {
       if (hole.greenie.playerId && !hole.greenie.threePutted) { greenieAwardedTo = hole.greenie.playerId; greenieSkins = STATE.rules.greenieValue * mult; }
       else if (hole.greenie.playerId && hole.greenie.threePutted) { reverseGreenieFor = round.players.filter(pid => pid !== hole.greenie.playerId); reverseGreenieSkins = STATE.rules.reverseGreenieValue * mult; }
     }
     const won = winnerIds.length === 1;
     const totalCountAwarded = won ? holeSkinCount + carriedCountCollected : 0;
     const totalValueAwarded = won ? holeSkinValue + carriedValueCollected : 0;
-    holeResults.push({ holeNum: i+1, par, mult, isPar3, nets, winnerIds, birdieTag,
+    holeResults.push({ holeNum: i+1, par, mult, isPar3, isPlayoff, courseHoleIdx, nets, winnerIds, birdieTag,
       holeSkinCount, holeSkinValue, carriedCountIn, carriedValueIn,
       carriedCountCollected, carriedValueCollected, totalCountAwarded, totalValueAwarded,
       carryCountAfter: newCarryCount, carryValueAfter: newCarryValue,
@@ -1052,6 +1066,15 @@ function renderNewRoundForm() {
   else tripSel.innerHTML = STATE.trips.map(t => '<option value="' + t.id + '"' + (t.id === STATE.currentTripId ? ' selected' : '') + '>' + escapeHtml(t.name) + '</option>').join('');
   $('#newRoundCourse').innerHTML = STATE.courses.map(c => '<option value="' + c.id + '">' + escapeHtml(c.name) + '</option>').join('');
   updateTeeOptions();
+  const carryBanner = $('#carryInBanner');
+  if (carryBanner) {
+    if (STATE.pendingCarry && STATE.pendingCarry.count > 0) {
+      const pc = STATE.pendingCarry;
+      carryBanner.innerHTML = '<label class="carry-in-banner"><input type="checkbox" id="carryInChk" checked /> <span>Carry in <b>' + pc.count + ' skin' + (pc.count === 1 ? '' : 's') + '</b> (' + fmt$(pc.value * STATE.rules.skinValue) + ') still unresolved from ' + escapeHtml(pc.label || 'the previous round') + '. Uncheck to start fresh.</span></label>';
+    } else {
+      carryBanner.innerHTML = '';
+    }
+  }
   const list = $('#newRoundPlayerList');
   if (STATE.players.length === 0) {
     list.innerHTML = '<p style="font-style:italic; color:#777;">No players in roster.</p>';
@@ -1065,8 +1088,23 @@ function updateTeeOptions() {
   const course = STATE.courses.find(c => c.id === courseId);
   const teeSel = $('#newRoundTees');
   if (!course) { teeSel.innerHTML = ''; $('#newRoundTeesInfo').textContent = ''; return; }
-  teeSel.innerHTML = course.tees.map(t => '<option value="' + t.name + '">' + escapeHtml(t.name) + ' — ' + t.rating + ' / ' + t.slope + '</option>').join('');
-  $('#newRoundTeesInfo').textContent = 'Course par ' + course.pars.reduce((a,b)=>a+b,0) + '.';
+  teeSel.innerHTML = course.tees.map(t => '<option value="' + t.name + '">' + escapeHtml(t.name) + ' — ' + (t.yards ? Number(t.yards).toLocaleString() + ' yds · ' : '') + t.rating + ' / ' + t.slope + '</option>').join('');
+  updateTeeInfo();
+}
+
+// Show the selected tee's yardage, rating and slope beneath the tee picker.
+function updateTeeInfo() {
+  const course = STATE.courses.find(c => c.id === $('#newRoundCourse').value);
+  const infoEl = $('#newRoundTeesInfo');
+  if (!infoEl) return;
+  if (!course) { infoEl.textContent = ''; return; }
+  const par = course.pars.reduce((a,b)=>a+b,0);
+  const tee = course.tees.find(t => t.name === $('#newRoundTees').value);
+  if (tee) {
+    infoEl.textContent = (tee.yards ? Number(tee.yards).toLocaleString() + ' yds · ' : '') + 'Rating ' + tee.rating + ' · Slope ' + tee.slope + ' · Par ' + par;
+  } else {
+    infoEl.textContent = 'Course par ' + par + '.';
+  }
 }
 
 function renderActiveRound() {
@@ -1084,7 +1122,7 @@ function renderActiveRound() {
   $('#roundPressCount').textContent = presses.length + ' / ' + STATE.rules.maxPresses;
   $('#roundPressHint').textContent = presses.length === 0 ? 'No press yet' : 'Last press: hole ' + presses[presses.length - 1].hole;
   $('#roundSkinsLive').textContent = formatSkins(Object.values(comp.perPlayer).reduce((s,v)=>s+v,0));
-  $('#roundHolesDone').textContent = comp.holeResults.filter(h => h.completed).length + ' / 18';
+  $('#roundHolesDone').textContent = comp.holeResults.slice(0, 18).filter(h => h.completed).length + ' / 18';
   const pressBtn = $('#pressBtn');
   const cp = canCallPress(r);
   pressBtn.disabled = !cp.allowed;
@@ -1105,6 +1143,29 @@ function renderActiveRound() {
   const container = $('#holesContainer');
   container.innerHTML = '';
   for (let i = 0; i < 18; i++) container.appendChild(renderHoleCard(i, r, course, comp));
+  const playoffLen = (r.playoff && r.playoff.length) || 0;
+  for (let i = 18; i < 18 + playoffLen; i++) container.appendChild(renderHoleCard(i, r, course, comp));
+  // Extra-hole controls: offer a playoff hole whenever skins are still carrying, or
+  // whenever playoff holes already exist (to add/remove more).
+  const lastRes = comp.holeResults[comp.holeResults.length - 1];
+  const liveCarryCount = lastRes ? lastRes.carryCountAfter : 0;
+  const liveCarryVal = lastRes ? lastRes.carryValueAfter : 0;
+  let ctrlHtml = '';
+  if (liveCarryCount > 0) {
+    ctrlHtml += '<div class="playoff-note">' + liveCarryCount + ' skin' + (liveCarryCount === 1 ? '' : 's') + ' still carrying (' + fmt$(liveCarryVal * STATE.rules.skinValue) + ') — add a playoff hole to settle it, or finalize to carry it into the next round.</div>';
+  }
+  if (liveCarryCount > 0 || playoffLen > 0) {
+    ctrlHtml += '<button type="button" class="btn btn-gold btn-sm" onclick="addPlayoffHole()">+ Add Playoff Hole</button>';
+  }
+  if (playoffLen > 0) {
+    ctrlHtml += '<button type="button" class="btn btn-ghost btn-sm" onclick="removePlayoffHole()">Remove Last Playoff Hole</button>';
+  }
+  if (ctrlHtml) {
+    const ctrl = document.createElement('div');
+    ctrl.className = 'playoff-control';
+    ctrl.innerHTML = ctrlHtml;
+    container.appendChild(ctrl);
+  }
   container.appendChild(renderTotalsCard(r, course, comp));
   $('#roundLiveStandings').innerHTML = r.players.map(pid => {
     const p = STATE.players.find(pl=>pl.id===pid);
@@ -1147,11 +1208,13 @@ function nextOpenHole(round) {
 }
 
 function renderHoleCard(i, round, course, comp) {
-  const par = course.pars[i];
-  const hi = course.hcps[i];
-  const isPar3 = par === 3;
   const result = comp.holeResults[i];
-  const hole = round.holes[i] || { scores: {}, greenie: null };
+  const isPlayoff = !!result.isPlayoff;
+  const courseHoleIdx = result.courseHoleIdx != null ? result.courseHoleIdx : i;
+  const par = result.par != null ? result.par : course.pars[courseHoleIdx];
+  const hi = course.hcps[courseHoleIdx];
+  const isPar3 = par === 3;
+  const hole = holeAt(round, i) || { scores: {}, greenie: null };
   const decided = result.completed && result.totalCountAwarded > 0;
   const isOpen = holeIsOpen(round, i, result);
   const div = document.createElement('div');
@@ -1186,7 +1249,7 @@ function renderHoleCard(i, round, course, comp) {
   const chevron = isOpen ? '▾' : '▸';
   const scoreRows = round.players.map(pid => {
     const p = STATE.players.find(pl=>pl.id===pid);
-    const strokes = strokesOnHole(comp.playerHcps[pid], i, course);
+    const strokes = strokesOnHole(comp.playerHcps[pid], courseHoleIdx, course);
     const gross = hole.scores ? hole.scores[pid] : '';
     const net = (gross != null && gross !== '') ? (gross - strokes) : '';
     const gval = (gross != null && gross !== undefined ? gross : '');
@@ -1199,7 +1262,9 @@ function renderHoleCard(i, round, course, comp) {
       + '<div class="score-row-strokes">' + (strokes>0?'+'+strokes:strokes||'') + '</div>'
       + '<div class="score-row-net">' + (net !== '' ? net : '—') + '</div></div>';
   }).join('');
-  div.innerHTML = '<div class="hole-card-header" onclick="toggleHole(' + i + ')"><h4>Hole ' + (i+1) + ' <span style="font-size:14px; color:rgba(245,239,224,.7); margin-left:8px;">Par ' + par + '</span></h4><div class="hole-head-right"><div class="meta">HCP ' + hi + ' · ' + result.mult + '× ' + (pressOnHole ? '· PRESSED' : '') + statusHint + '</div><span class="hole-toggle">' + chevron + '</span></div></div><div class="hole-card-body"><div class="score-row" style="border-bottom: 2px solid var(--masters-gold); padding-bottom:6px; margin-bottom:6px;"><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999;">Player</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Gross</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Str</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Net</div></div>' + scoreRows + (isPar3 ? renderGreenieControls(i, round, hole) : '') + ((winBadge || carriedBadge) ? '<div class="hole-result">' + carriedBadge + winBadge + '</div>' : '') + '</div>';
+  const title = isPlayoff ? ('Playoff ' + (i - 17)) : ('Hole ' + (i + 1));
+  const parLabel = isPlayoff ? ('Par ' + par + ' · plays #' + (courseHoleIdx + 1)) : ('Par ' + par);
+  div.innerHTML = '<div class="hole-card-header" onclick="toggleHole(' + i + ')"><h4>' + title + ' <span style="font-size:14px; color:rgba(245,239,224,.7); margin-left:8px;">' + parLabel + '</span></h4><div class="hole-head-right"><div class="meta">HCP ' + hi + ' · ' + result.mult + '× ' + (pressOnHole ? '· PRESSED' : '') + statusHint + '</div><span class="hole-toggle">' + chevron + '</span></div></div><div class="hole-card-body"><div class="score-row" style="border-bottom: 2px solid var(--masters-gold); padding-bottom:6px; margin-bottom:6px;"><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999;">Player</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Gross</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Str</div><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:#999; text-align:center;">Net</div></div>' + scoreRows + ((isPar3 && !isPlayoff) ? renderGreenieControls(i, round, hole) : '') + ((winBadge || carriedBadge) ? '<div class="hole-result">' + carriedBadge + winBadge + '</div>' : '') + '</div>';
   return div;
 }
 
@@ -1268,14 +1333,31 @@ function renderGreenieControls(i, round, hole) {
   return '<div class="greenie-controls"><div style="font-family:Inter; font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--masters-green-dark); margin-bottom:6px;">Greenie (Closest to Pin, GIR)</div><label><input type="radio" name="greenie-' + i + '" value=""' + (!g || !g.playerId ? ' checked' : '') + ' onchange="setGreenie(' + i + ', null)" /> None / no one hit green</label>' + playerOpts + threePuttRow + '</div>';
 }
 
+// Hole storage is split: regulation holes 0–17 live in round.holes, playoff holes
+// 18+ live in round.playoff. These helpers read/create the right slot by global index.
+function holeAt(round, i) {
+  if (i >= 18) { return (round.playoff || [])[i - 18]; }
+  return round.holes[i];
+}
+function ensureHoleAt(round, i) {
+  if (i >= 18) {
+    round.playoff = round.playoff || [];
+    if (!round.playoff[i - 18]) round.playoff[i - 18] = { scores: {}, greenie: null };
+    return round.playoff[i - 18];
+  }
+  if (!round.holes[i]) round.holes[i] = { scores: {}, greenie: null };
+  return round.holes[i];
+}
 // A hole is "active" (auto-expanded) while its skins are still in play: it's the
 // current hole to play, or it has scores in but hasn't been decided yet (a tie that
 // carries stays active). Once a hole awards skins outright it's decided → auto-collapse.
 // Future untouched holes stay collapsed too, so only live holes are open by default.
+// Playoff holes stay open until decided (they exist only to resolve a live carry).
 function holeIsActive(round, i, result) {
-  const hole = round.holes[i];
+  const hole = holeAt(round, i);
   const hasAnyScore = hole && hole.scores && Object.values(hole.scores).some(v => v != null && v !== '');
   const decided = result.completed && result.totalCountAwarded > 0;
+  if (i >= 18) return !decided;
   const isCurrent = (i + 1) === nextOpenHole(round);
   return isCurrent || (hasAnyScore && !decided);
 }
@@ -1297,9 +1379,9 @@ function toggleHole(i) {
 function setScore(holeIdx, playerId, value) {
   if (!STATE.activeRound) return;
   const round = STATE.activeRound;
-  if (!round.holes[holeIdx]) round.holes[holeIdx] = { scores: {}, greenie: null };
+  const h = ensureHoleAt(round, holeIdx);
   const v = value === '' || value == null ? null : parseInt(value, 10);
-  round.holes[holeIdx].scores[playerId] = (v != null && !isNaN(v)) ? v : null;
+  h.scores[playerId] = (v != null && !isNaN(v)) ? v : null;
   saveState();
   renderActiveRound();
   renderLeaderboard();
@@ -1310,15 +1392,16 @@ function bumpScore(holeIdx, playerId, delta) {
   if (!STATE.activeRound) return;
   const round = STATE.activeRound;
   const course = STATE.courses.find(c => c.id === round.courseId);
-  if (!round.holes[holeIdx]) round.holes[holeIdx] = { scores: {}, greenie: null };
-  const cur = round.holes[holeIdx].scores[playerId];
+  const h = ensureHoleAt(round, holeIdx);
+  const parIdx = holeIdx % 18;   // playoff holes reuse the course holes in order
+  const cur = h.scores[playerId];
   let next;
   if (cur == null || cur === '' || isNaN(cur)) {
-    next = course && course.pars[holeIdx] ? course.pars[holeIdx] : 4;
+    next = course && course.pars[parIdx] ? course.pars[parIdx] : 4;
   } else {
     next = Math.min(15, Math.max(1, cur + delta));
   }
-  round.holes[holeIdx].scores[playerId] = next;
+  h.scores[playerId] = next;
   saveState();
   renderActiveRound();
   renderLeaderboard();
@@ -1351,6 +1434,28 @@ function callPress() {
   showToast('Press called on hole ' + check.hole + '!');
   renderActiveRound();
   renderLeaderboard();
+}
+// Extra "playoff" holes (19+) to keep playing until a carried pot is won.
+function addPlayoffHole() {
+  if (!STATE.activeRound) return;
+  STATE.activeRound.playoff = STATE.activeRound.playoff || [];
+  STATE.activeRound.playoff.push({ scores: {}, greenie: null });
+  saveState();
+  showToast('Playoff hole added — plays as hole ' + (((STATE.activeRound.playoff.length - 1) % 18) + 1) + '.');
+  renderActiveRound();
+  renderLeaderboard();
+}
+function removePlayoffHole() {
+  if (!STATE.activeRound) return;
+  const po = STATE.activeRound.playoff || [];
+  if (!po.length) return;
+  showConfirm('Remove the last playoff hole and its scores?', () => {
+    STATE.activeRound.playoff.pop();
+    if (STATE.activeRound._holeOverride) delete STATE.activeRound._holeOverride[18 + STATE.activeRound.playoff.length];
+    saveState();
+    renderActiveRound();
+    renderLeaderboard();
+  });
 }
 function cancelPress(hole) {
   if (!STATE.activeRound) return;
@@ -1407,9 +1512,17 @@ function startRound() {
     players: playerIds,
     handicapsForRound,
     holes: Array.from({ length: 18 }, () => ({ scores: {}, greenie: null })),
+    playoff: [],
     presses: [],
     _holeOverride: {}
   };
+  // Carry an unresolved pot from the previous round into this one, if opted in.
+  const carryChk = $('#carryInChk');
+  if (STATE.pendingCarry && carryChk && carryChk.checked) {
+    STATE.activeRound.carryIn = { count: STATE.pendingCarry.count, value: STATE.pendingCarry.value };
+    showToast(STATE.pendingCarry.count + ' skin(s) carried into this round.');
+  }
+  STATE.pendingCarry = null;
   STATE.currentTripId = tripId;
   saveState();
   renderAll();
@@ -1417,14 +1530,27 @@ function startRound() {
 
 function finalizeRound() {
   if (!STATE.activeRound) return;
-  showConfirm('Finalize this round and add it to the tournament ledger?', () => {
+  const comp = computeRoundSkins(STATE.activeRound);
+  const last = comp.holeResults[comp.holeResults.length - 1];
+  const trailingCount = last ? last.carryCountAfter : 0;
+  const trailingVal = last ? last.carryValueAfter : 0;
+  const msg = trailingCount > 0
+    ? 'Finalize this round? ' + trailingCount + ' skin(s) are still carrying — they will be offered to carry into your next round.'
+    : 'Finalize this round and add it to the tournament ledger?';
+  showConfirm(msg, () => {
     const r = { ...STATE.activeRound };
     delete r._openHoles;
     delete r._holeOverride;
     STATE.rounds.push(r);
     STATE.activeRound = null;
+    if (trailingCount > 0) {
+      const course = STATE.courses.find(c => c.id === r.courseId);
+      STATE.pendingCarry = { count: trailingCount, value: trailingVal, tripId: r.tripId, label: (course ? course.name : 'Round') + ' · ' + r.date };
+    } else {
+      STATE.pendingCarry = null;
+    }
     saveState();
-    showToast('Round finalized.');
+    showToast(trailingCount > 0 ? 'Round finalized · ' + trailingCount + ' skin(s) pending carry-forward.' : 'Round finalized.');
     renderAll();
     switchPanel('leaderboard');
   });
@@ -1578,7 +1704,7 @@ function renderCourses() {
   const list = $('#courseList');
   if (STATE.courses.length === 0) { list.innerHTML = '<div class="empty-state">No courses.</div>'; return; }
   list.innerHTML = STATE.courses.map(c => {
-    const teeCards = c.tees.map(t => '<div style="background:white; padding:10px; border:1px solid var(--rule);"><div style="font-family:Playfair Display; font-style:italic; font-weight:600; color:var(--masters-green-dark); font-size:16px;">' + escapeHtml(t.name) + '</div><div style="font-family:Inter; font-size:11px; color:#666; letter-spacing:.05em; margin-top:2px;">Rating ' + t.rating + ' · Slope ' + t.slope + '</div></div>').join('');
+    const teeCards = c.tees.map((t, ti) => '<div style="background:white; padding:10px; border:1px solid var(--rule);"><div style="font-family:Playfair Display; font-style:italic; font-weight:600; color:var(--masters-green-dark); font-size:16px;">' + escapeHtml(t.name) + '</div><div style="font-family:Inter; font-size:11px; color:#666; letter-spacing:.05em; margin-top:2px;">Rating ' + t.rating + ' · Slope ' + t.slope + '</div><div style="display:flex; align-items:center; gap:6px; margin-top:8px;"><input type="number" inputmode="numeric" min="0" step="1" value="' + (t.yards != null ? t.yards : '') + '" placeholder="yards" onchange="setTeeYards(\'' + c.id + '\', ' + ti + ', this.value)" style="width:88px; font-size:14px; padding:6px; text-align:center;" /><span style="font-family:Inter; font-size:10px; color:#888; letter-spacing:.12em; text-transform:uppercase;">yds</span></div></div>').join('');
     return '<div class="card"><div class="card-header"><div class="card-title">' + escapeHtml(c.name) + '</div><div class="card-meta">Par ' + c.pars.reduce((a,b)=>a+b,0) + ' · ' + c.tees.length + ' tees</div></div><div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 14px;">' + teeCards + '</div><div style="font-family:Inter; font-size:11px; color:#666; letter-spacing:.05em;"><strong>Pars:</strong> ' + c.pars.join(' · ') + '<br/><strong>HCP:</strong> ' + c.hcps.join(' · ') + '</div><div class="player-card-actions"><button class="btn btn-danger btn-sm" onclick="deleteCourse(\'' + c.id + '\')">Remove</button></div></div>';
   }).join('');
 }
@@ -1592,7 +1718,8 @@ function addCourse() {
   const tees = teesRaw.split('\n').map(line => {
     const parts = line.split('/').map(x=>x.trim());
     if (parts.length < 3 || !parts[0] || !parts[1] || !parts[2]) return null;
-    return { name: parts[0], rating: parseFloat(parts[1]), slope: parseInt(parts[2], 10) };
+    const yv = parts[3] ? parseInt(parts[3].replace(/[^0-9]/g,''), 10) : NaN;
+    return { name: parts[0], rating: parseFloat(parts[1]), slope: parseInt(parts[2], 10), yards: (!isNaN(yv) && yv > 0) ? yv : null };
   }).filter(Boolean);
   if (tees.length === 0) { showToast('Add at least one tee (Name / Rating / Slope)'); return; }
   const pars = parsRaw.split(/[,\s]+/).map(x=>parseInt(x,10)).filter(n=>!isNaN(n));
@@ -1615,6 +1742,17 @@ function deleteCourse(id) {
     saveState();
     renderAll();
   });
+}
+
+// Inline-edit a tee's total yardage from the Courses tab (display only — the
+// course-handicap math uses rating & slope, not yardage).
+function setTeeYards(courseId, teeIdx, val) {
+  const c = STATE.courses.find(x => x.id === courseId);
+  if (!c || !c.tees[teeIdx]) return;
+  const y = parseInt(val, 10);
+  c.tees[teeIdx].yards = (isNaN(y) || y <= 0) ? null : y;
+  saveState();
+  renderAll();
 }
 
 function renderHall() {
@@ -1739,6 +1877,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#sessionBtn').addEventListener('click', () => { $('#exportArea').style.display='none'; $('#importArea').style.display='none'; openModal('sessionModal'); });
   $('#startRoundBtn').addEventListener('click', startRound);
   $('#newRoundCourse').addEventListener('change', updateTeeOptions);
+  $('#newRoundTees').addEventListener('change', updateTeeInfo);
   $('#addPlayerBtn').addEventListener('click', addPlayer);
   $('#addCourseBtn').addEventListener('click', addCourse);
   $('#addTripBtn').addEventListener('click', addTrip);
