@@ -268,13 +268,12 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 
 <header class="masthead">
   <div class="masthead-inner">
-    <svg class="logo-mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-      <g>
-        <path d="M 8 38 L 28 38 L 28 28 L 50 28 L 50 22 L 88 22 Q 92 30 90 42 Q 87 52 88 60 L 82 70 L 70 72 L 60 70 L 50 72 L 35 70 L 18 70 L 12 60 L 10 50 Z" fill="#c9a961" stroke="#e6c878" stroke-width="0.5" />
-        <line x1="14" y1="33" x2="14" y2="14" stroke="#faf6ec" stroke-width="1.2" stroke-linecap="round"/>
-        <path d="M 14 14 L 26 17 L 14 20 Z" fill="#8b1a1a" stroke="#faf6ec" stroke-width="0.4"/>
-        <circle cx="14" cy="33" r="2.2" fill="#8b1a1a" stroke="#faf6ec" stroke-width="0.6"/>
-        <text x="58" y="55" font-family="Playfair Display, serif" font-size="18" font-weight="900" font-style="italic" fill="#00432d" text-anchor="middle">N</text>
+    <svg class="logo-mark" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Golf flag with Nebraska">
+      <ellipse cx="24" cy="88" rx="12" ry="3.2" fill="rgba(238,243,238,0.18)"/>
+      <line x1="24" y1="87" x2="24" y2="12" stroke="#eef3ee" stroke-width="3" stroke-linecap="round"/>
+      <path d="M24,12 L74,12 C79,24 79,33 74,45 L24,45 Z" fill="#e6c56e"/>
+      <g transform="translate(27,19) scale(0.46)">
+        <path d="M0,10 L70,10 L75,5 L88,20 L84,30 L88,38 L82,46 L26,46 L26,32 L0,32 Z" fill="#0b3f28"/>
       </g>
     </svg>
     <div class="masthead-text">
@@ -533,6 +532,20 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
   </div>
 </div>
 
+<div class="modal-backdrop" id="editTripModal">
+  <div class="modal">
+    <h3>Edit Trip</h3>
+    <div class="field"><label>Trip Name</label><input type="text" id="editTripName" /></div>
+    <div class="field"><label>Start Date</label><input type="date" id="editTripStart" /></div>
+    <div class="field"><label>End Date</label><input type="date" id="editTripEnd" /></div>
+    <div class="helper">Editing a trip's name or dates doesn't change its rounds. To fix scores, edit the round in the Rounds tab.</div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal('editTripModal')">Cancel</button>
+      <button class="btn btn-primary" id="saveEditedTripBtn">Save</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="confirmModal">
   <div class="modal" style="max-width: 440px;">
     <h3>Confirm</h3>
@@ -548,7 +561,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 <div class="footer">The WJZ Nasters · Scottsbluff, Nebraska · Played for honor, glory, skins · and to avoid the Monkey Butt</div>
 
 <script>
-const DEFAULT_RULES = { skinValue: 1.00, pressStyle: 'double', maxPresses: 3, finalPressHole: 10, front9Bonus: 10, back9Bonus: 10, roundBonus: 10, greenieValue: 1, reverseGreenieValue: 1, hcpAllowance: 100 };
+const DEFAULT_RULES = { skinValue: 1.00, pressStyle: 'increment', maxPresses: 3, finalPressHole: 10, front9Bonus: 10, back9Bonus: 10, roundBonus: 10, greenieValue: 1, reverseGreenieValue: 1, hcpAllowance: 100 };
 
 const SEED = {
   rules: { ...DEFAULT_RULES },
@@ -799,6 +812,12 @@ async function loadState() {
           : updated > 0 ? `Updated ${updated} course${updated===1?'':'s'} with SDGA-official ratings`
           : null;
         if (msg) setTimeout(() => showToast(msg), 600);
+        await saveState();
+      }
+      // Migration v5: default the game to incrementing presses (was doubling).
+      if (!STATE.seedVersion || STATE.seedVersion < 5) {
+        if (STATE.rules && STATE.rules.pressStyle === 'double') STATE.rules.pressStyle = 'increment';
+        STATE.seedVersion = 5;
         await saveState();
       }
     }
@@ -1491,22 +1510,56 @@ function pressStatusForHole(round, holeNum) {
   if (isLast && holeNum < STATE.rules.finalPressHole) return { pressed: false, allowed: false, reason: 'The final press must be on hole ' + STATE.rules.finalPressHole + ' or later.' };
   return { pressed: false, allowed: true };
 }
+// The current skins leader (by trip standings, incl. this round) among the round's
+// players — they aren't allowed to press. null if nobody has skins yet or the lead is tied.
+function currentLeaderId(round) {
+  const agg = aggregateStandings(r => r.tripId === round.tripId);
+  let leaderId = null, max = -Infinity, tie = false;
+  round.players.forEach(pid => {
+    const v = agg[pid] || 0;
+    if (v > max) { max = v; leaderId = pid; tie = false; }
+    else if (v === max) { tie = true; }
+  });
+  if (max <= 0) return null;
+  return tie ? null : leaderId;
+}
 function openPressModal(holeNum) {
   const r = STATE.activeRound;
   if (!r) return;
   const st = pressStatusForHole(r, holeNum);
+  const leaderId = currentLeaderId(r);
   const style = STATE.rules.pressStyle === 'double' ? 'doubles' : 'adds one skin to';
   $('#pressModalTitle').textContent = 'Press · Hole ' + holeNum;
-  $('#pressModalBody').innerHTML =
-    '<p>A press ' + style + ' the skin value from this hole onward — earlier holes keep their value. '
-    + 'Up to ' + STATE.rules.maxPresses + ' presses per round; the final press must be on hole ' + STATE.rules.finalPressHole + ' or later.</p>'
-    + (st.pressed ? '<p class="press-state on">● A press is active on hole ' + holeNum + '.</p>'
-      : st.allowed ? '<p class="press-state">No press on hole ' + holeNum + ' yet.</p>'
-      : '<p class="press-state warn">✕ ' + st.reason + '</p>');
+  let body = '<p>A press ' + style + ' the skin value from this hole onward — including greenies — while earlier holes keep their value. '
+    + 'Up to ' + STATE.rules.maxPresses + ' presses per round; the final press must be on hole ' + STATE.rules.finalPressHole + ' or later. The current skins leader can’t press.</p>';
+  let hasPresser = false;
+  if (st.pressed) {
+    const p = (r.presses || []).find(x => x.hole === holeNum);
+    const byName = p && p.by ? ((STATE.players.find(pl => pl.id === p.by) || {}).name || '') : '';
+    body += '<p class="press-state on">● Press active on hole ' + holeNum + (byName ? ' · by ' + escapeHtml(byName) : '') + '.</p>';
+  } else if (st.allowed) {
+    const eligible = r.players.filter(pid => pid !== leaderId);
+    if (eligible.length === 0) {
+      body += '<p class="press-state warn">No eligible presser — only the skins leader remains.</p>';
+    } else {
+      hasPresser = true;
+      const opts = r.players.map(pid => {
+        const nm = (STATE.players.find(p => p.id === pid) || {}).name || '?';
+        const isLeader = pid === leaderId;
+        return '<option value="' + pid + '"' + (isLeader ? ' disabled' : '') + '>' + escapeHtml(nm) + (isLeader ? ' — leader (can’t press)' : '') + '</option>';
+      }).join('');
+      body += '<div class="field" style="margin-top:14px;"><label>Who is pressing?</label><select id="pressBySelect">' + opts + '</select></div>';
+    }
+  } else {
+    body += '<p class="press-state warn">✕ ' + st.reason + '</p>';
+  }
+  $('#pressModalBody').innerHTML = body;
   const actions = $('#pressModalActions');
   if (st.pressed) actions.innerHTML = '<button class="btn btn-danger" onclick="cancelPressAt(' + holeNum + ')">Cancel Press on Hole ' + holeNum + '</button>';
-  else if (st.allowed) actions.innerHTML = '<button class="btn btn-gold" onclick="callPressOnHole(' + holeNum + ')">Call Press on Hole ' + holeNum + '</button>';
+  else if (hasPresser) actions.innerHTML = '<button class="btn btn-gold" onclick="callPressOnHole(' + holeNum + ')">Call Press on Hole ' + holeNum + '</button>';
   else actions.innerHTML = '';
+  const sel = $('#pressBySelect');
+  if (sel) { const firstNon = r.players.find(pid => pid !== leaderId); if (firstNon) sel.value = firstNon; }
   openModal('pressModal');
 }
 function callPressOnHole(holeNum) {
@@ -1514,11 +1567,17 @@ function callPressOnHole(holeNum) {
   if (!r) return;
   const st = pressStatusForHole(r, holeNum);
   if (st.pressed || !st.allowed) { showToast(st.reason || 'Cannot press this hole.'); return; }
+  const leaderId = currentLeaderId(r);
+  const sel = $('#pressBySelect');
+  const by = sel ? sel.value : null;
+  if (!by) { showToast('Pick who is pressing.'); return; }
+  if (by === leaderId) { showToast('The skins leader can’t press.'); return; }
   r.presses = r.presses || [];
-  r.presses.push({ hole: holeNum, ts: Date.now() });
+  r.presses.push({ hole: holeNum, by: by, ts: Date.now() });
   saveState();
   closeModal('pressModal');
-  showToast('Press called on hole ' + holeNum + '.');
+  const nm = (STATE.players.find(p => p.id === by) || {}).name || '';
+  showToast('Press called on hole ' + holeNum + (nm ? ' by ' + nm : '') + '.');
   renderActiveRound();
   renderLeaderboard();
 }
@@ -1662,7 +1721,7 @@ function renderTrips() {
     const finBtn = fin
       ? '<button class="btn btn-ghost btn-sm" onclick="unfinalizeTrip(\'' + t.id + '\')">Un-finalize</button>'
       : '<button class="btn btn-gold btn-sm" onclick="finalizeTrip(\'' + t.id + '\')">Finalize Trip</button>';
-    return '<div class="trip-card ' + (isCurrent ? 'trip-current' : '') + '"><h4>' + escapeHtml(t.name) + ' ' + finBadge + '</h4><div class="meta">' + escapeHtml(t.start || '—') + ' → ' + escapeHtml(t.end || '—') + ' · ' + tripRounds.length + ' round(s) · Leader: ' + escapeHtml(leaderName) + '</div><div style="margin-top: 12px;" class="row-actions">' + (isCurrent ? '<span class="skin-badge">Current Trip</span>' : '<button class="btn btn-ghost btn-sm" onclick="setCurrentTrip(\'' + t.id + '\')">Set as Current</button>') + finBtn + '<button class="btn btn-danger btn-sm" onclick="deleteTrip(\'' + t.id + '\')">Delete</button></div></div>';
+    return '<div class="trip-card ' + (isCurrent ? 'trip-current' : '') + '"><h4>' + escapeHtml(t.name) + ' ' + finBadge + '</h4><div class="meta">' + escapeHtml(t.start || '—') + ' → ' + escapeHtml(t.end || '—') + ' · ' + tripRounds.length + ' round(s) · Leader: ' + escapeHtml(leaderName) + '</div><div style="margin-top: 12px;" class="row-actions">' + (isCurrent ? '<span class="skin-badge">Current Trip</span>' : '<button class="btn btn-ghost btn-sm" onclick="setCurrentTrip(\'' + t.id + '\')">Set as Current</button>') + '<button class="btn btn-ghost btn-sm" onclick="editTrip(\'' + t.id + '\')">Edit</button>' + finBtn + '<button class="btn btn-danger btn-sm" onclick="deleteTrip(\'' + t.id + '\')">Delete</button></div></div>';
   }).join('');
 }
 
@@ -1732,6 +1791,32 @@ function addTrip() {
 
 function setCurrentTrip(id) { STATE.currentTripId = id; saveState(); renderAll(); }
 
+let _editingTripId = null;
+function editTrip(id) {
+  const t = STATE.trips.find(x => x.id === id);
+  if (!t) return;
+  _editingTripId = id;
+  $('#editTripName').value = t.name || '';
+  $('#editTripStart').value = t.start || '';
+  $('#editTripEnd').value = t.end || '';
+  openModal('editTripModal');
+}
+function saveEditedTrip() {
+  if (!_editingTripId) return;
+  const t = STATE.trips.find(x => x.id === _editingTripId);
+  if (!t) return;
+  const name = $('#editTripName').value.trim();
+  if (!name) { showToast('Trip name required'); return; }
+  t.name = name;
+  t.start = $('#editTripStart').value || '';
+  t.end = $('#editTripEnd').value || '';
+  closeModal('editTripModal');
+  _editingTripId = null;
+  saveState();
+  showToast(name + ' updated');
+  renderAll();
+}
+
 function deleteTrip(id) {
   const trip = STATE.trips.find(t=>t.id===id);
   if (!trip) return;
@@ -1760,8 +1845,30 @@ function renderRoundsHistory() {
     const total = Object.values(comp.perPlayer).reduce((s,v)=>s+v,0);
     const standings = Object.entries(comp.perPlayer).sort((a,b)=>b[1]-a[1])
       .map(([pid,v]) => escapeHtml((STATE.players.find(p=>p.id===pid)||{}).name || '?') + ': ' + formatSkins(v)).join(' · ');
-    return '<div class="round-history-item"><div class="info"><h4>' + escapeHtml(course ? course.name : 'Course') + ' — ' + escapeHtml(r.date) + (r.label ? ' · ' + escapeHtml(r.label) : '') + '</h4><p>' + (trip ? escapeHtml(trip.name) + ' · ' : '') + escapeHtml(r.teeName) + ' tees · ' + r.players.length + ' players · ' + (r.presses||[]).length + ' presses</p><p style="margin-top: 6px; font-size:14px; font-family:Cormorant Garamond; font-style:italic; color:#444; letter-spacing:0;">' + standings + '</p></div><div><div class="round-history-skins">' + formatSkins(total) + ' skins</div><div style="font-family:Inter; font-size:11px; color:#888; text-align:right; margin-top:4px;">' + fmt$(total * STATE.rules.skinValue) + '</div><div style="text-align:right; margin-top:8px;"><button class="btn btn-danger btn-sm" onclick="deleteRound(\'' + r.id + '\')">Remove</button></div></div></div>';
+    return '<div class="round-history-item"><div class="info"><h4>' + escapeHtml(course ? course.name : 'Course') + ' — ' + escapeHtml(r.date) + (r.label ? ' · ' + escapeHtml(r.label) : '') + '</h4><p>' + (trip ? escapeHtml(trip.name) + ' · ' : '') + escapeHtml(r.teeName) + ' tees · ' + r.players.length + ' players · ' + (r.presses||[]).length + ' presses</p><p style="margin-top: 6px; font-size:14px; font-family:Cormorant Garamond; font-style:italic; color:#444; letter-spacing:0;">' + standings + '</p></div><div><div class="round-history-skins">' + formatSkins(total) + ' skins</div><div style="font-family:Inter; font-size:11px; color:#888; text-align:right; margin-top:4px;">' + fmt$(total * STATE.rules.skinValue) + '</div><div style="text-align:right; margin-top:8px; display:flex; gap:6px; justify-content:flex-end;"><button class="btn btn-ghost btn-sm" onclick="editRound(\'' + r.id + '\')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteRound(\'' + r.id + '\')">Remove</button></div></div></div>';
   }).join('');
+}
+
+// Re-open a finalized round as the active round so scores/presses can be corrected,
+// then re-finalized. If its trip was finalized, un-finalize it so the Hall updates.
+function editRound(id) {
+  if (STATE.activeRound) { showToast('Finish or cancel the current round before editing another.'); return; }
+  const idx = STATE.rounds.findIndex(r => r.id === id);
+  if (idx < 0) return;
+  showConfirm('Re-open this finalized round for editing? It leaves the ledger until you finalize it again.', () => {
+    const r = STATE.rounds.splice(idx, 1)[0];
+    r.playoff = r.playoff || [];
+    r._holeOverride = { 0: true };
+    STATE.activeRound = r;
+    STATE.currentTripId = r.tripId;
+    const trip = STATE.trips.find(t => t.id === r.tripId);
+    let unfin = false;
+    if (trip && trip.finalized) { delete trip.finalized; unfin = true; }
+    saveState();
+    showToast('Round re-opened for editing' + (unfin ? ' · trip un-finalized' : '') + '.');
+    renderAll();
+    switchPanel('round');
+  });
 }
 
 function deleteRound(id) {
@@ -2039,6 +2146,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#copyCodeBtn').addEventListener('click', doCopyCode);
   $('#confirmImportBtn').addEventListener('click', doImport);
   $('#saveEditedPlayerBtn').addEventListener('click', saveEditedPlayer);
+  $('#saveEditedTripBtn').addEventListener('click', saveEditedTrip);
   loadState();
 });
 
