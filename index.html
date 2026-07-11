@@ -566,9 +566,9 @@ const DEFAULT_RULES = { skinValue: 1.00, pressStyle: 'increment', maxPresses: 3,
 const SEED = {
   rules: { ...DEFAULT_RULES },
   players: [
-    { id: 'p_warren', name: 'Warren Ng', ghin: null, hcp: null },
-    { id: 'p_zac',    name: 'Zac Kamtz',  ghin: null, hcp: null },
-    { id: 'p_jon',    name: 'Jon Gillam', ghin: null, hcp: null }
+    { id: 'p_warren', name: 'Warren Ng', ghin: null, hcp: 15.8 },
+    { id: 'p_zac',    name: 'Zac Kamtz',  ghin: null, hcp: 7.1 },
+    { id: 'p_jon',    name: 'Jon Gillam', ghin: null, hcp: 11.8 }
   ],
   courses: [
     {
@@ -658,7 +658,7 @@ const SEED = {
   rounds: [],
   activeRound: null,
   currentTripId: 't_nasters_2026_sd',
-  seedVersion: 4
+  seedVersion: 6
 };
 
 let STATE = JSON.parse(JSON.stringify(SEED));
@@ -818,6 +818,13 @@ async function loadState() {
       if (!STATE.seedVersion || STATE.seedVersion < 5) {
         if (STATE.rules && STATE.rules.pressStyle === 'double') STATE.rules.pressStyle = 'increment';
         STATE.seedVersion = 5;
+        await saveState();
+      }
+      // Migration v6: seed the roster's default handicap indexes.
+      if (!STATE.seedVersion || STATE.seedVersion < 6) {
+        const defaults = { p_warren: 15.8, p_zac: 7.1, p_jon: 11.8 };
+        (STATE.players || []).forEach(p => { if (defaults[p.id] != null) p.hcp = defaults[p.id]; });
+        STATE.seedVersion = 6;
         await saveState();
       }
     }
