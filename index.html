@@ -30,7 +30,11 @@
   --font-display: 'Playfair Display', Georgia, serif;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { background: var(--paper); color: var(--ink); font-family: var(--font-ui); font-size: 16px; line-height: 1.5; min-height: 100vh; -webkit-font-smoothing: antialiased; }
+html, body { background: var(--paper); color: var(--ink); font-family: var(--font-ui); font-size: 16px; line-height: 1.5; min-height: 100vh; -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* Keep the layout framed to the screen: a wide element (e.g. the 18-column strokes
+   grid) scrolls inside its own container and never widens the page. overflow-x: clip
+   (not hidden) avoids creating a scroll container, so the sticky tab bar still works. */
+html, body { overflow-x: clip; max-width: 100%; }
 body { background: radial-gradient(circle at 15% -5%, rgba(26,125,82,0.10) 0%, transparent 42%), radial-gradient(circle at 100% 8%, rgba(200,162,74,0.08) 0%, transparent 40%), var(--paper); background-attachment: fixed; }
 .masthead { background: linear-gradient(140deg, var(--masters-green-deep) 0%, var(--masters-green) 130%); color: var(--masters-cream); padding: 22px 24px; position: relative; overflow: hidden; }
 .masthead::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(90deg, var(--masters-gold) 0%, var(--masters-gold-bright) 50%, var(--masters-gold) 100%); }
@@ -175,7 +179,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .playoff-pick select { width: auto; flex: 1; }
 .press-state { margin-top: 12px; font-weight: 600; color: var(--masters-green-dark); }
 .press-state.warn { color: var(--masters-red); }
-.strokes-grid-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.strokes-grid-wrap { display: block; width: 100%; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
 .strokes-grid { border-collapse: collapse; font-family: 'Inter', sans-serif; font-size: 12px; }
 .strokes-grid th, .strokes-grid td { border: 1px solid var(--rule); padding: 5px 7px; text-align: center; min-width: 26px; }
 .strokes-grid thead th { background: var(--masters-green); color: var(--masters-cream); font-weight: 600; font-size: 11px; }
@@ -259,6 +263,9 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
   .hall-podium { grid-template-columns: 1fr; }
   .hall-year-num { font-size: 48px; }
   .hall-prize-name { font-size: 28px; }
+  .strokes-grid { font-size: 11px; }
+  .strokes-grid th, .strokes-grid td { min-width: 20px; padding: 4px 4px; }
+  .strokes-grid th.pname { font-size: 12px; }
 }
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
