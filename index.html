@@ -493,7 +493,14 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 <div class="modal-backdrop" id="sessionModal">
   <div class="modal">
     <h3>Share with Zac &amp; Jon</h3>
-    <p style="margin-bottom: 14px;">Three ways to play together:</p>
+    <div id="liveSyncSection" style="margin: 4px 0 22px; padding:16px; border:1px solid var(--rule); border-radius: var(--radius-sm); background: var(--masters-ivory);">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px;">
+        <span style="font-family:var(--font-display); font-weight:600; color:var(--masters-green-dark); font-size:18px;">⚡ Live Sync</span>
+        <span id="liveSyncBadge" style="font-family:var(--font-ui); font-size:11px; font-weight:600; letter-spacing:0.04em;"></span>
+      </div>
+      <div id="liveSyncBody"></div>
+    </div>
+    <p style="margin-bottom: 14px;">Or the low-tech ways to play together:</p>
     <h4 style="font-family:'Playfair Display'; color:var(--masters-green-dark); margin-bottom:8px;">1 · Single Scorekeeper (Easiest)</h4>
     <p style="font-size:15px; color:#555; margin-bottom:18px;">One person keeps score on their phone; others watch the leaderboard over the shoulder. Zero syncing needed.</p>
     <h4 style="font-family:'Playfair Display'; color:var(--masters-green-dark); margin-bottom:8px;">2 · Export &amp; Share via Text</h4>
@@ -668,18 +675,16 @@ const SHARED = true;
 /* ============================================================
    CLOUD SYNC CONFIGURATION
    ============================================================
-   To enable real-time multi-device sync via Firebase Firestore:
-   1. Create a free project at https://console.firebase.google.com
-   2. Add a Web app and copy its config object (see DEPLOY.md)
-   3. Create a Firestore database and paste the security rules
-      from DEPLOY.md
-   4. Fill in the config below, then deploy to Netlify
+   EASIEST WAY: don't touch this code. Open the app, tap "Share / Sync"
+   in the header, and paste your Firebase config into the box — it saves
+   on your device and connects instantly.
 
-   The web config below is safe to expose in client-side code —
-   access is governed by Firestore security rules, not by hiding
-   these values.
+   To bake it into the shared site (so Zac & Jon just open the URL and
+   it's already connected), fill in BAKED_FIREBASE_CONFIG below and deploy.
+   The web config is safe to expose — access is governed by Firestore
+   security rules, not by hiding these values. Full walkthrough in DEPLOY.md.
    ============================================================ */
-const firebaseConfig = {
+const BAKED_FIREBASE_CONFIG = {
   apiKey: '',             // e.g. 'AIzaSy...'
   authDomain: '',         // e.g. 'wjz-nasters.firebaseapp.com'
   projectId: '',          // e.g. 'wjz-nasters'
@@ -687,6 +692,12 @@ const firebaseConfig = {
   messagingSenderId: '',  // e.g. '1234567890'
   appId: ''               // e.g. '1:1234567890:web:abcdef'
 };
+const FIREBASE_CONFIG_KEY = 'wjz-firebase-config';
+let firebaseConfig = { ...BAKED_FIREBASE_CONFIG };
+try {
+  const _saved = JSON.parse(localStorage.getItem(FIREBASE_CONFIG_KEY) || 'null');
+  if (_saved && _saved.apiKey && _saved.projectId) firebaseConfig = _saved;
+} catch (e) {}
 const ROOM_ID = 'wjz-nasters';   // shared room ID — change if you want a separate game
 
 const CLOUD_ENABLED = !!(firebaseConfig.apiKey && firebaseConfig.projectId && window.firebase);
@@ -721,6 +732,53 @@ function setSyncStatus(s) {
   el.style.color = l.color;
 }
 
+// --- In-app Firebase connect (no code editing needed) ---------------------
+// Pull apiKey/projectId/etc out of a pasted config, whether it's the whole
+// `const firebaseConfig = {...}` snippet or just the object.
+function parseFirebaseConfig(text) {
+  const out = {};
+  ['apiKey','authDomain','projectId','storageBucket','messagingSenderId','appId','measurementId'].forEach(k => {
+    const m = text.match(new RegExp(k + "\\s*:\\s*[\"']([^\"']+)[\"']"));
+    if (m) out[k] = m[1];
+  });
+  return out;
+}
+function connectFirebase() {
+  const el = document.getElementById('fbConfigInput');
+  const cfg = parseFirebaseConfig(el ? el.value : '');
+  if (!cfg.apiKey || !cfg.projectId) { showToast('Couldn’t read the config — paste the whole thing from Firebase.'); return; }
+  try { localStorage.setItem(FIREBASE_CONFIG_KEY, JSON.stringify(cfg)); } catch(e) { showToast('Could not save config.'); return; }
+  showToast('Connecting live sync…');
+  setTimeout(() => location.reload(), 500);
+}
+function disconnectFirebase() {
+  showConfirm('Turn off live sync on this device? Your game stays saved here locally.', () => {
+    try { localStorage.removeItem(FIREBASE_CONFIG_KEY); } catch(e){}
+    setTimeout(() => location.reload(), 300);
+  });
+}
+function renderLiveSync() {
+  const body = document.getElementById('liveSyncBody');
+  const badge = document.getElementById('liveSyncBadge');
+  if (!body || !badge) return;
+  let savedCfg = null;
+  try { savedCfg = JSON.parse(localStorage.getItem(FIREBASE_CONFIG_KEY) || 'null'); } catch(e){}
+  const connected = CLOUD_ENABLED && !!_docRef;
+  if (connected) {
+    badge.textContent = '● Connected';
+    badge.style.color = '#2e7d4f';
+    body.innerHTML = '<p style="font-size:14px; color:#444; margin-bottom:10px;">Syncing live to project <b>' + escapeHtml(firebaseConfig.projectId) + '</b> · room <b>' + escapeHtml(ROOM_ID) + '</b>. Everyone who opens this link shares the same game in real time.</p>'
+      + (savedCfg ? '<button class="btn btn-danger btn-sm" onclick="disconnectFirebase()">Turn Off Sync (this device)</button>'
+                  : '<p style="font-size:12px; color:#888;">Baked into the site — shared automatically by everyone on the link.</p>');
+  } else {
+    badge.textContent = '○ Not connected';
+    badge.style.color = '#999';
+    body.innerHTML = '<p style="font-size:14px; color:#444; margin-bottom:8px;">Paste your Firebase config to sync all phones live. Get it from the Firebase console → <b>Project settings</b> → your web app. (Full steps in DEPLOY.md.)</p>'
+      + '<textarea id="fbConfigInput" rows="6" placeholder="Paste the whole firebaseConfig here…" style="font-family:monospace; font-size:12px;"></textarea>'
+      + '<button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="connectFirebase()">Connect Live Sync</button>';
+  }
+}
+
 async function saveState() {
   // Always save locally first as a fallback
   let localOk = false;
@@ -753,6 +811,7 @@ async function saveState() {
 async function loadState() {
   try {
     let raw = null;
+    let cloudHadData = false;
 
     // 1) Try cloud first if configured
     if (CLOUD_ENABLED && _docRef) {
@@ -763,6 +822,7 @@ async function loadState() {
           const data = snap.data();
           if (data && data.state) {
             raw = typeof data.state === 'string' ? data.state : JSON.stringify(data.state);
+            cloudHadData = true;
             setSyncStatus('synced');
           }
         }
@@ -827,6 +887,12 @@ async function loadState() {
         STATE.seedVersion = 6;
         await saveState();
       }
+    }
+
+    // First connect to a fresh/empty cloud: push whatever we have locally so the
+    // cloud isn't empty and the others pull this game when they open the link.
+    if (CLOUD_ENABLED && _docRef && !cloudHadData && raw) {
+      try { await saveState(); } catch (e) {}
     }
 
     // 3) Subscribe to real-time updates from other devices
@@ -2136,7 +2202,7 @@ function switchPanel(name) {
 
 document.addEventListener('DOMContentLoaded', () => {
   $$('.tab').forEach(t => t.addEventListener('click', () => switchPanel(t.dataset.panel)));
-  $('#sessionBtn').addEventListener('click', () => { $('#exportArea').style.display='none'; $('#importArea').style.display='none'; openModal('sessionModal'); });
+  $('#sessionBtn').addEventListener('click', () => { $('#exportArea').style.display='none'; $('#importArea').style.display='none'; renderLiveSync(); openModal('sessionModal'); });
   $('#startRoundBtn').addEventListener('click', startRound);
   $('#newRoundCourse').addEventListener('change', updateTeeOptions);
   $('#newRoundTees').addEventListener('change', updateTeeInfo);
