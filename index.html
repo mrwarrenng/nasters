@@ -224,6 +224,9 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(160%); background: var(--masters-green-deep); color: var(--masters-gold-bright); padding: 13px 22px; border-radius: 999px; font-family: var(--font-ui); font-weight: 600; font-size: 14px; z-index: 200; transition: transform 0.3s; box-shadow: 0 8px 24px rgba(0,0,0,0.25); max-width: 90vw; text-align: center; }
 .toast.show { transform: translateX(-50%) translateY(0); }
+.howto-list { margin: 4px 0 0 0; padding-left: 20px; }
+.howto-list li { font-size: 15px; color: #33403a; margin-bottom: 12px; line-height: 1.5; }
+.howto-list li b { color: var(--masters-green-dark); }
 .footer { text-align: center; padding: 30px 20px; color: #999; font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 14px; }
 .footer::before { content: '✦'; color: var(--masters-gold); display: block; margin-bottom: 8px; font-size: 12px; }
 .trip-card { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); padding: 18px; margin-bottom: 14px; }
@@ -282,8 +285,11 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
       <div class="tagline">Scottsbluff Invitational · Skins, Greenies &amp; Glory</div>
     </div>
     <div style="display:flex; flex-direction:column; align-items:flex-end; gap: 6px;">
-      <button class="session-pill" id="sessionBtn">Share / Sync</button>
-      <div id="syncStatus" style="font-family:'Inter', sans-serif; font-size:10px; letter-spacing:0.15em; text-transform:uppercase; color:rgba(245,239,224,0.5);">○ Local only</div>
+      <div style="display:flex; gap:6px;">
+        <button class="session-pill" id="howToBtn" title="How to use" aria-label="How to use" style="padding:9px 13px;">?</button>
+        <button class="session-pill" id="sessionBtn">Share / Sync</button>
+      </div>
+      <div id="syncStatus" style="font-family:'Inter', sans-serif; font-size:10px; letter-spacing:0.08em; color:rgba(238,243,238,0.6);">○ Local only</div>
     </div>
   </div>
 </header>
@@ -492,37 +498,53 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 
 <div class="modal-backdrop" id="sessionModal">
   <div class="modal">
-    <h3>Share with Zac &amp; Jon</h3>
-    <div id="liveSyncSection" style="margin: 4px 0 22px; padding:16px; border:1px solid var(--rule); border-radius: var(--radius-sm); background: var(--masters-ivory);">
+    <h3>Sync &amp; Share</h3>
+    <div id="liveSyncSection" style="margin: 4px 0 20px; padding:16px; border:1px solid var(--rule); border-radius: var(--radius-sm); background: var(--masters-ivory);">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px;">
         <span style="font-family:var(--font-display); font-weight:600; color:var(--masters-green-dark); font-size:18px;">⚡ Live Sync</span>
         <span id="liveSyncBadge" style="font-family:var(--font-ui); font-size:11px; font-weight:600; letter-spacing:0.04em;"></span>
       </div>
       <div id="liveSyncBody"></div>
     </div>
-    <p style="margin-bottom: 14px;">Or the low-tech ways to play together:</p>
-    <h4 style="font-family:'Playfair Display'; color:var(--masters-green-dark); margin-bottom:8px;">1 · Single Scorekeeper (Easiest)</h4>
-    <p style="font-size:15px; color:#555; margin-bottom:18px;">One person keeps score on their phone; others watch the leaderboard over the shoulder. Zero syncing needed.</p>
-    <h4 style="font-family:'Playfair Display'; color:var(--masters-green-dark); margin-bottom:8px;">2 · Export &amp; Share via Text</h4>
-    <p style="font-size:15px; color:#555; margin-bottom:10px;">Tap Export, text the code to Zac and Jon, they open this page and tap Import.</p>
-    <div class="row-actions" style="margin-bottom: 18px;">
-      <button class="btn btn-gold" id="exportBtn">Export &amp; Copy</button>
-      <button class="btn btn-ghost" id="importBtn">Import from Code</button>
+    <h4 style="font-family:'Playfair Display'; color:var(--masters-green-dark); margin-bottom:6px;">Add a player</h4>
+    <p style="font-size:14px; color:#555; margin-bottom:18px;">Just send them this page's link. Everyone on the same URL shares the live game — no setup on their end.</p>
+    <h4 style="font-family:'Playfair Display'; color:var(--masters-green-dark); margin-bottom:6px;">Backup &amp; restore</h4>
+    <p style="font-size:14px; color:#555; margin-bottom:10px;">Optional. Export copies the whole game as a code you can save; Import loads one back.</p>
+    <div class="row-actions" style="margin-bottom: 4px;">
+      <button class="btn btn-ghost btn-sm" id="exportBtn">Export</button>
+      <button class="btn btn-ghost btn-sm" id="importBtn">Import</button>
     </div>
-    <div id="exportArea" style="display:none;">
+    <div id="exportArea" style="display:none; margin-top:12px;">
       <div class="share-box">
         <div class="share-box-label">Game State Code</div>
-        <textarea id="exportCode" readonly rows="6" style="font-family: monospace; font-size: 11px; background: rgba(0,0,0,0.3); color: var(--masters-cream); border: 1px solid var(--masters-gold); width:100%;"></textarea>
+        <textarea id="exportCode" readonly rows="6" style="font-family: monospace; font-size: 11px; background: rgba(0,0,0,0.3); color: var(--masters-cream); border: 1px solid var(--masters-gold); width:100%; border-radius:8px;"></textarea>
         <button class="btn btn-gold btn-sm" id="copyCodeBtn" style="margin-top: 8px;">Copy to Clipboard</button>
       </div>
     </div>
-    <div id="importArea" style="display:none;">
+    <div id="importArea" style="display:none; margin-top:12px;">
       <div class="field"><label>Paste Game State</label><textarea id="importCode" rows="6" placeholder="Paste the code..."></textarea></div>
       <button class="btn btn-primary btn-sm" id="confirmImportBtn">Load Game State</button>
     </div>
-    <h4 style="font-family:'Playfair Display'; color:var(--masters-green-dark); margin-top:24px; margin-bottom:8px;">3 · Same Conversation</h4>
-    <p style="font-size:15px; color:#555;">If all of you are in the same Claude conversation, state syncs automatically on reload. Otherwise use export/import.</p>
     <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal('sessionModal')">Close</button></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="howToModal">
+  <div class="modal">
+    <h3>How to Use</h3>
+    <ol class="howto-list">
+      <li><b>Start a round.</b> Go to <b>Today's Round</b>, pick the trip, course, tees and who's playing (handicaps pre-fill), then <b>Start Round</b>.</li>
+      <li><b>Enter scores.</b> Tap a hole to open it, then use the <b>− / +</b> buttons to set each gross score — no keyboard needed. Net and strokes fill in automatically.</li>
+      <li><b>Skins.</b> Lowest <em>net</em> score wins the hole. Ties carry to the next hole. A net <b>birdie</b> doubles that hole's skins, a net <b>eagle</b> triples them.</li>
+      <li><b>Press.</b> Tap the red <b>(P)</b> on a hole to raise the stakes from that hole onward. Pick who's pressing — the current leader can't press.</li>
+      <li><b>Greenies.</b> On par 3s, mark closest-to-the-pin. Three-putt it and everyone else gets a reverse greenie.</li>
+      <li><b>Extra holes.</b> If skins are still carrying after 18, add a <b>Playoff Hole</b> (choose which hole it plays), or carry the pot into the next round when you finalize.</li>
+      <li><b>Finalize.</b> <b>Finalize Round</b> at the bottom logs it to the ledger. Need to fix it later? <b>Edit</b> it from the <b>Rounds</b> tab.</li>
+      <li><b>Trips &amp; Hall.</b> Rounds group into <b>Trips</b>. <b>Finalize a trip</b> to crown its Champion and curse its Monkey Butt in the <b>Hall of Fame &amp; Shame</b>.</li>
+      <li><b>Everyone stays in sync.</b> Anyone who opens this link shares the same live game. The header shows <b>● Synced</b> and the last completed hole.</li>
+    </ol>
+    <p style="font-size:13px; color:var(--muted); margin-top:12px;">House rules (skin value, press style, bonuses) live in the <b>Rules</b> tab.</p>
+    <div class="modal-actions"><button class="btn btn-primary" onclick="closeModal('howToModal')">Got it</button></div>
   </div>
 </div>
 
@@ -716,20 +738,40 @@ if (CLOUD_ENABLED) {
   } catch(e) { console.error('Firebase init failed', e); }
 }
 
-function setSyncStatus(s) {
-  _syncStatus = s;
+// The furthest hole with every player's score in — used in the sync indicator so
+// you can see at a glance that everyone's caught up to the same point.
+function lastCompletedHoleLabel() {
+  if (!STATE.activeRound) return null;
+  try {
+    const comp = computeRoundSkins(STATE.activeRound);
+    let last = null;
+    comp.holeResults.forEach(h => { if (h.completed) last = h; });
+    if (!last) return null;
+    return last.isPlayoff ? ('Playoff ' + (last.holeNum - 18)) : ('Hole ' + last.holeNum);
+  } catch (e) { return null; }
+}
+const _SYNC_LABELS = {
+  'synced':  { text: 'Synced',     color: '#8fd6a0', dot: '●' },
+  'syncing': { text: 'Syncing…',   color: '#e6c56e', dot: '○' },
+  'updated': { text: 'Updated',    color: '#8fd6a0', dot: '●' },
+  'error':   { text: 'Sync error', color: '#f0a8a0', dot: '●' },
+  'offline': { text: 'Local only', color: 'rgba(238,243,238,0.6)', dot: '○' }
+};
+function renderSyncStatus() {
   const el = document.getElementById('syncStatus');
   if (!el) return;
-  const labels = {
-    'synced':   { text: '● Synced',   color: '#7fb98c' },
-    'syncing':  { text: '○ Syncing…', color: '#e6c878' },
-    'updated':  { text: '● Updated',  color: '#7fb98c' },
-    'error':    { text: '● Error',    color: '#e89999' },
-    'offline':  { text: '○ Local only', color: 'rgba(245,239,224,0.5)' }
-  };
-  const l = labels[s] || labels.offline;
-  el.textContent = l.text;
+  const l = _SYNC_LABELS[_syncStatus] || _SYNC_LABELS.offline;
+  let hole = '';
+  if (_syncStatus !== 'offline' && STATE.activeRound) {
+    const lbl = lastCompletedHoleLabel();
+    hole = ' · ' + (lbl ? 'thru ' + lbl : 'round started');
+  }
+  el.textContent = l.dot + ' ' + l.text + hole;
   el.style.color = l.color;
+}
+function setSyncStatus(s) {
+  _syncStatus = s;
+  renderSyncStatus();
 }
 
 // --- In-app Firebase connect (no code editing needed) ---------------------
@@ -1138,6 +1180,7 @@ function renderAll() {
   renderCourses();
   renderHall();
   renderRules();
+  renderSyncStatus();
 }
 
 function getScopedRounds() {
@@ -2203,6 +2246,7 @@ function switchPanel(name) {
 document.addEventListener('DOMContentLoaded', () => {
   $$('.tab').forEach(t => t.addEventListener('click', () => switchPanel(t.dataset.panel)));
   $('#sessionBtn').addEventListener('click', () => { $('#exportArea').style.display='none'; $('#importArea').style.display='none'; renderLiveSync(); openModal('sessionModal'); });
+  $('#howToBtn').addEventListener('click', () => openModal('howToModal'));
   $('#startRoundBtn').addEventListener('click', startRound);
   $('#newRoundCourse').addEventListener('change', updateTeeOptions);
   $('#newRoundTees').addEventListener('change', updateTeeInfo);
