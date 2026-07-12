@@ -65,28 +65,24 @@ service cloud.firestore {
 
 ---
 
-## Part 2 — Configure the app
+## Part 2 — Connect the app
 
-### 2.1 Paste your Firebase config into the HTML
+### 2.1 Easiest: paste it in the app (no code)
 
-Open `index.html` in a text editor (VS Code, TextEdit, Notepad, anything). Search for `firebaseConfig` — you'll find this block near the top of the JavaScript:
+1. Open the app and tap **Share / Sync** in the header.
+2. In the **⚡ Live Sync** box, paste the whole `firebaseConfig` you copied in Part 1.2 and tap **Connect Live Sync**.
+3. The app reloads and shows **● Connected**. Done — your current game is pushed up automatically.
 
-```js
-const firebaseConfig = {
-  apiKey: '',             // e.g. 'AIzaSy...'
-  authDomain: '',         // e.g. 'wjz-nasters.firebaseapp.com'
-  projectId: '',          // e.g. 'wjz-nasters'
-  storageBucket: '',      // e.g. 'wjz-nasters.appspot.com'
-  messagingSenderId: '',  // e.g. '1234567890'
-  appId: ''               // e.g. '1:1234567890:web:abcdef'
-};
-const ROOM_ID = 'wjz-nasters';   // shared room ID — change if you want a separate game
-```
+This saves the config on your device. It's the quickest way to get syncing.
 
-Fill in the values from the `firebaseConfig` you copied in Part 1.2:
+### 2.2 To make the shared link work for everyone (recommended)
+
+If you want Zac and Jon to just open the URL and be connected — without each pasting the config — bake it into the site once:
+
+Open `index.html`, search for `BAKED_FIREBASE_CONFIG`, and fill in the six values:
 
 ```js
-const firebaseConfig = {
+const BAKED_FIREBASE_CONFIG = {
   apiKey: 'AIzaSy...',
   authDomain: 'wjz-nasters.firebaseapp.com',
   projectId: 'wjz-nasters',
@@ -94,12 +90,11 @@ const firebaseConfig = {
   messagingSenderId: '1234567890',
   appId: '1:1234567890:web:abcdef123456'
 };
-const ROOM_ID = 'wjz-nasters';
 ```
 
-The app only needs `apiKey` and `projectId` to be filled to switch on sync, but paste all six so nothing else in Firebase complains. Save the file.
+Only `apiKey` and `projectId` are strictly required, but paste all six. Commit and push — Netlify redeploys and everyone on the link is synced. (Or just send the config to your coding assistant and have it wired in for you.)
 
-> **Tip:** Want a separate game for a future trip (Costa Rica 2027, etc)? Change `ROOM_ID` to a different string. All three of you must use the same `ROOM_ID` to share the same game.
+> **Tip:** Want a separate game for a future trip (Costa Rica 2027, etc)? Change `ROOM_ID` (search for it in `index.html`) to a different string. All three of you must use the same `ROOM_ID` to share the same game.
 
 ---
 
