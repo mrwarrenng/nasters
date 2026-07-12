@@ -467,8 +467,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
       <div class="field"><label>Front Nine Bonus (skins)</label><input type="number" id="ruleFront9Bonus" min="0" /></div>
       <div class="field"><label>Back Nine Bonus (skins)</label><input type="number" id="ruleBack9Bonus" min="0" /></div>
       <div class="field"><label>Full Round Bonus (skins)</label><input type="number" id="ruleRoundBonus" min="0" /></div>
-      <div class="field"><label>Greenie Value (× current press value)</label><input type="number" id="ruleGreenieValue" min="0" step="0.5" /><div class="helper">Default 1 = greenie worth exactly the current pressed skin value</div></div>
-      <div class="field"><label>Reverse Greenie Value (× current press, each other player)</label><input type="number" id="ruleReverseGreenieValue" min="0" step="0.5" /><div class="helper">Default 1 = each other player earns one skin at current pressed value</div></div>
+      <div class="field"><label>Greenie Value (skins)</label><input type="number" id="ruleGreenieValue" min="0" step="0.5" /><div class="helper">Fixed skin value — presses and net birdies/eagles don't change it.</div></div>
+      <div class="field"><label>Reverse Greenie Value (skins, each other player)</label><input type="number" id="ruleReverseGreenieValue" min="0" step="0.5" /><div class="helper">Fixed skin value each other player earns — not affected by presses.</div></div>
       <div class="field"><label>Handicap Allowance (%)</label><input type="number" id="ruleHcpAllowance" min="50" max="100" /><div class="helper">USGA recommends ~90% for skins</div></div>
     </div>
     <div class="row-actions" style="margin-top: 18px;">
@@ -479,11 +479,11 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
   <h3 style="margin-top: 32px;">How We Play</h3>
   <div class="rule-grid">
     <div class="rule-item"><h4>Skins</h4><p>One skin per hole to the player with the lowest <em>net</em> score. Ties carry forward, compounding until won outright.</p></div>
-    <div class="rule-item"><h4>Presses</h4><p>A player behind on round skins may press at the start of a hole. Doubles (or increments) per-hole skin value from the pressed hole onward — never on earlier holes. Max 3; third needs back nine. Called a press on the wrong hole? Use its chip to move it to another hole or cancel it — skins recalculate instantly.</p></div>
+    <div class="rule-item"><h4>Presses</h4><p>A player behind on round skins may press at the start of a hole. Doubles (or increments) per-hole skin value from the pressed hole onward — never on earlier holes, and never greenies (those stay fixed). Max 3; third needs back nine. Called a press on the wrong hole? Use its chip to move or cancel it — skins recalculate instantly.</p></div>
     <div class="rule-item"><h4>Net Birdies &amp; Eagles</h4><p>Win a hole with a <em>net birdie</em> and the skins won on that hole double; a <em>net eagle</em> (or better) triples them — at the current press value. The bonus applies only to that hole's skins, not to carried-in skins.</p></div>
     <div class="rule-item"><h4>Carryovers</h4><p>Each carried skin is locked at the value of the hole it was won on. A later press lifts only the holes from the press onward — it never re-values skins carried from before it.</p></div>
-    <div class="rule-item"><h4>Greenies</h4><p>Closest to the pin in regulation on par-3s earns a greenie at the current press value.</p></div>
-    <div class="rule-item"><h4>Reverse Greenies</h4><p>Three-putt your greenie? Lose it; every other player earns a reverse greenie at the current press value.</p></div>
+    <div class="rule-item"><h4>Greenies</h4><p>Closest to the pin in regulation on par-3s earns a greenie — a fixed skin value that presses and net birdies/eagles never change.</p></div>
+    <div class="rule-item"><h4>Reverse Greenies</h4><p>Three-putt your greenie? Lose it; every other player earns a reverse greenie, also a fixed skin value.</p></div>
     <div class="rule-item"><h4>Nine &amp; Round Bonuses</h4><p>Lowest net F9, B9, and total round each pay a bonus. Ties split evenly.</p></div>
     <div class="rule-item"><h4>Daily Handicaps</h4><p>Each round lets you override each player's handicap index. GHIN updates daily — use today's number.</p></div>
     <div class="rule-item"><h4>Stroke Allocation</h4><p>Each player's <em>course handicap</em> is calculated from their index, tees, and the allowance. Then the <em>lowest handicap in the group plays at scratch</em>, and others receive strokes equal to the difference — applied on the hardest holes by stroke index. This is the USGA standard for net play between mixed handicaps.</p></div>
@@ -534,7 +534,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
       <li><b>Enter scores.</b> Tap a hole to open it, then use the <b>− / +</b> buttons to set each gross score — no keyboard needed. Net and strokes fill in automatically.</li>
       <li><b>Skins.</b> Lowest <em>net</em> score wins the hole. Ties carry to the next hole. A net <b>birdie</b> doubles that hole's skins, a net <b>eagle</b> triples them.</li>
       <li><b>Press.</b> Tap the red <b>(P)</b> on a hole to raise the stakes from that hole onward. Pick who's pressing — the current leader can't press.</li>
-      <li><b>Greenies.</b> On par 3s, mark closest-to-the-pin. Three-putt it and everyone else gets a reverse greenie.</li>
+      <li><b>Greenies.</b> On par 3s, mark closest-to-the-pin — worth a fixed skin (presses and birdies/eagles don't change greenies). Three-putt it and everyone else gets a reverse greenie.</li>
       <li><b>Extra holes.</b> If skins are still carrying after 18, add a <b>Playoff Hole</b> (choose which hole it plays), or carry the pot into the next round when you finalize.</li>
       <li><b>Finalize.</b> <b>Finalize Round</b> at the bottom logs it to the ledger. Need to fix it later? <b>Edit</b> it from the <b>Rounds</b> tab.</li>
       <li><b>Trips &amp; Hall.</b> Rounds group into <b>Trips</b>. <b>Finalize a trip</b> to crown its Champion and curse its Monkey Butt in the <b>Hall of Fame &amp; Shame</b>.</li>
@@ -1147,8 +1147,9 @@ function computeRoundSkins(round) {
     }
     let greenieAwardedTo = null, reverseGreenieFor = [], greenieSkins = 0, reverseGreenieSkins = 0;
     if (isPar3 && !isPlayoff && hole.greenie) {
-      if (hole.greenie.playerId && !hole.greenie.threePutted) { greenieAwardedTo = hole.greenie.playerId; greenieSkins = STATE.rules.greenieValue * mult; }
-      else if (hole.greenie.playerId && hole.greenie.threePutted) { reverseGreenieFor = round.players.filter(pid => pid !== hole.greenie.playerId); reverseGreenieSkins = STATE.rules.reverseGreenieValue * mult; }
+      // Greenies/reverses are a FIXED skin value — presses and net birdies/eagles never change them.
+      if (hole.greenie.playerId && !hole.greenie.threePutted) { greenieAwardedTo = hole.greenie.playerId; greenieSkins = STATE.rules.greenieValue; }
+      else if (hole.greenie.playerId && hole.greenie.threePutted) { reverseGreenieFor = round.players.filter(pid => pid !== hole.greenie.playerId); reverseGreenieSkins = STATE.rules.reverseGreenieValue; }
     }
     const won = winnerIds.length === 1;
     const totalCountAwarded = won ? holeSkinCount + carriedCountCollected : 0;
@@ -1682,7 +1683,7 @@ function openPressModal(holeNum) {
   const leaderId = currentLeaderId(r);
   const style = STATE.rules.pressStyle === 'double' ? 'doubles' : 'adds one skin to';
   $('#pressModalTitle').textContent = 'Press · Hole ' + holeNum;
-  let body = '<p>A press ' + style + ' the skin value from this hole onward — including greenies — while earlier holes keep their value. '
+  let body = '<p>A press ' + style + ' the per-hole skin value from this hole onward, while earlier holes keep their value. Greenies stay a fixed value and aren’t affected. '
     + 'Up to ' + STATE.rules.maxPresses + ' presses per round; the final press must be on hole ' + STATE.rules.finalPressHole + ' or later. The current skins leader can’t press.</p>';
   let hasPresser = false;
   if (st.pressed) {
