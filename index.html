@@ -464,6 +464,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
       <div class="field"><label>Press Multiplier Style</label><select id="rulePressStyle"><option value="double">Double (×2)</option><option value="increment">Increment (+1×)</option></select></div>
       <div class="field"><label>Max Presses Per Round</label><input type="number" id="ruleMaxPresses" min="0" max="9" /></div>
       <div class="field"><label>Earliest Hole for Final Press</label><input type="number" id="ruleFinalPressHole" min="1" max="18" /><div class="helper">Default 10 = "back nine only"</div></div>
+      <div class="field"><label>Net Birdie / Eagle Bonus</label><select id="ruleNetScoreBonus"><option value="on">On</option><option value="off">Off</option></select><div class="helper">On: win a hole and add a bonus on top of its value — net birdie +1 skin, net eagle +the hole's pressed value, net double eagle +2× it.</div></div>
       <div class="field"><label>Front Nine Bonus (skins)</label><input type="number" id="ruleFront9Bonus" min="0" /></div>
       <div class="field"><label>Back Nine Bonus (skins)</label><input type="number" id="ruleBack9Bonus" min="0" /></div>
       <div class="field"><label>Full Round Bonus (skins)</label><input type="number" id="ruleRoundBonus" min="0" /></div>
@@ -480,7 +481,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
   <div class="rule-grid">
     <div class="rule-item"><h4>Skins</h4><p>One skin per hole to the player with the lowest <em>net</em> score. Ties carry forward, compounding until won outright.</p></div>
     <div class="rule-item"><h4>Presses</h4><p>A player behind on round skins may press at the start of a hole. Doubles (or increments) per-hole skin value from the pressed hole onward — never on earlier holes, and never greenies (those stay fixed). Max 3; third needs back nine. Called a press on the wrong hole? Use its chip to move or cancel it — skins recalculate instantly.</p></div>
-    <div class="rule-item"><h4>Net Birdies &amp; Eagles</h4><p>Win a hole with a <em>net birdie</em> and the skins won on that hole double; a <em>net eagle</em> (or better) triples them — at the current press value. The bonus applies only to that hole's skins, not to carried-in skins.</p></div>
+    <div class="rule-item"><h4>Net Birdies &amp; Eagles</h4><p>Win a hole and, on top of its value (including presses), earn a net-score bonus: a <em>net birdie</em> adds 1 bonus skin; a <em>net eagle</em> adds a bonus equal to the hole's pressed value; a <em>net double eagle</em> adds twice it. (So a 2×-pressed birdie pays 2 + 1 = 3; a 3×-pressed eagle pays 3 + 3 = 6.) The bonus applies only to that hole's skin, not to carried-in skins, and can be switched off in the Rules settings.</p></div>
     <div class="rule-item"><h4>Carryovers</h4><p>Each carried skin is locked at the value of the hole it was won on. A later press lifts only the holes from the press onward — it never re-values skins carried from before it.</p></div>
     <div class="rule-item"><h4>Greenies</h4><p>Closest to the pin in regulation on par-3s earns a greenie — a fixed skin value that presses and net birdies/eagles never change.</p></div>
     <div class="rule-item"><h4>Reverse Greenies</h4><p>Three-putt your greenie? Lose it; every other player earns a reverse greenie, also a fixed skin value.</p></div>
@@ -532,7 +533,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
     <ol class="howto-list">
       <li><b>Start a round.</b> Go to <b>Today's Round</b>, pick the trip, course, tees and who's playing (handicaps pre-fill), then <b>Start Round</b>.</li>
       <li><b>Enter scores.</b> Tap a hole to open it, then use the <b>− / +</b> buttons to set each gross score — no keyboard needed. Net and strokes fill in automatically.</li>
-      <li><b>Skins.</b> Lowest <em>net</em> score wins the hole. Ties carry to the next hole. A net <b>birdie</b> doubles that hole's skins, a net <b>eagle</b> triples them.</li>
+      <li><b>Skins.</b> Lowest <em>net</em> score wins the hole. Ties carry to the next hole. On a win you also earn a net-score bonus: <b>birdie</b> +1 skin, <b>eagle</b> + the hole's pressed value, <b>double eagle</b> +2× it (toggle in Rules).</li>
       <li><b>Press.</b> Tap the red <b>(P)</b> on a hole to raise the stakes from that hole onward. Pick who's pressing — the current leader can't press.</li>
       <li><b>Greenies.</b> On par 3s, mark closest-to-the-pin — worth a fixed skin (presses and birdies/eagles don't change greenies). Three-putt it and everyone else gets a reverse greenie.</li>
       <li><b>Extra holes.</b> If skins are still carrying after 18, add a <b>Playoff Hole</b> (choose which hole it plays), or carry the pot into the next round when you finalize.</li>
@@ -602,7 +603,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 <div class="footer">WJZ Nasters — No One Wants to be a Monkey's Ass</div>
 
 <script>
-const DEFAULT_RULES = { skinValue: 1.00, pressStyle: 'increment', maxPresses: 3, finalPressHole: 10, front9Bonus: 10, back9Bonus: 10, roundBonus: 10, greenieValue: 1, reverseGreenieValue: 1, hcpAllowance: 100 };
+const DEFAULT_RULES = { skinValue: 1.00, pressStyle: 'increment', maxPresses: 3, finalPressHole: 10, netScoreBonus: 'on', front9Bonus: 10, back9Bonus: 10, roundBonus: 10, greenieValue: 1, reverseGreenieValue: 1, hcpAllowance: 100 };
 
 const SEED = {
   rules: { ...DEFAULT_RULES },
@@ -1126,15 +1127,20 @@ function computeRoundSkins(round) {
       const low = sorted[0][1];
       const winners = sorted.filter(([_, v]) => v === low);
       if (winners.length === 1) {
-        // Outright winner. A net birdie doubles the skins won ON THIS HOLE, a net eagle (or
-        // better) triples them — valued at the current press multiplier. This bonus applies
-        // only to the hole's own skins; carried-in skins are collected at their locked value.
+        // Outright winner gets the hole's own skin at the current press value (= mult), PLUS a
+        // net-score bonus (if enabled): net birdie adds 1 flat skin; net eagle adds the hole's
+        // pressed value; net double-eagle (or better) adds twice it. Carried-in skins are
+        // collected separately at their locked value; the net bonus never touches them.
         const underPar = par - low;
-        const factor = underPar >= 2 ? 3 : (underPar === 1 ? 2 : 1);
-        birdieTag = factor === 3 ? 'eagle' : (factor === 2 ? 'birdie' : null);
+        let bonusVal = 0;
+        if (STATE.rules.netScoreBonus !== 'off') {
+          if (underPar >= 3) { bonusVal = 2 * mult; birdieTag = 'albatross'; }
+          else if (underPar === 2) { bonusVal = mult; birdieTag = 'eagle'; }
+          else if (underPar === 1) { bonusVal = 1; birdieTag = 'birdie'; }
+        }
         winnerIds = [winners[0][0]];
-        holeSkinCount = factor;
-        holeSkinValue = factor * mult;
+        holeSkinValue = mult + bonusVal;
+        holeSkinCount = holeSkinValue;   // app shows "skins" as press-weighted value units
         carriedCountCollected = carriedCountIn;
         carriedValueCollected = carriedValueIn;
         newCarryCount = 0;
@@ -1152,8 +1158,8 @@ function computeRoundSkins(round) {
       else if (hole.greenie.playerId && hole.greenie.threePutted) { reverseGreenieFor = round.players.filter(pid => pid !== hole.greenie.playerId); reverseGreenieSkins = STATE.rules.reverseGreenieValue; }
     }
     const won = winnerIds.length === 1;
-    const totalCountAwarded = won ? holeSkinCount + carriedCountCollected : 0;
     const totalValueAwarded = won ? holeSkinValue + carriedValueCollected : 0;
+    const totalCountAwarded = totalValueAwarded;   // "skins" are shown as value units app-wide
     holeResults.push({ holeNum: i+1, par, mult, isPar3, isPlayoff, courseHoleIdx, nets, winnerIds, birdieTag,
       holeSkinCount, holeSkinValue, carriedCountIn, carriedValueIn,
       carriedCountCollected, carriedValueCollected, totalCountAwarded, totalValueAwarded,
@@ -1463,8 +1469,9 @@ function renderHoleCard(i, round, course, comp) {
       const w = STATE.players.find(p => p.id === result.winnerIds[0]);
       const sw = result.totalCountAwarded;
       const money = fmt$(result.totalValueAwarded * STATE.rules.skinValue);
-      const tag = result.birdieTag === 'eagle' ? ' <span class="skin-badge birdie">Net Eagle ×3</span>'
-                : result.birdieTag === 'birdie' ? ' <span class="skin-badge birdie">Net Birdie ×2</span>' : '';
+      const tag = result.birdieTag === 'albatross' ? ' <span class="skin-badge birdie">Net Double Eagle · +2× hole</span>'
+                : result.birdieTag === 'eagle' ? ' <span class="skin-badge birdie">Net Eagle · +1× hole</span>'
+                : result.birdieTag === 'birdie' ? ' <span class="skin-badge birdie">Net Birdie · +1 skin</span>' : '';
       winBadge = '<span class="skin-badge">' + escapeHtml(w.name) + ' · ' + sw + ' skin' + (sw>1?'s':'') + ' · ' + money + '</span>' + tag;
     } else winBadge = '<span class="skin-badge carried">Tied · Carries</span>';
   }
@@ -2245,6 +2252,7 @@ function renderRules() {
   $('#rulePressStyle').value = r.pressStyle;
   $('#ruleMaxPresses').value = r.maxPresses;
   $('#ruleFinalPressHole').value = r.finalPressHole;
+  $('#ruleNetScoreBonus').value = r.netScoreBonus || 'on';
   $('#ruleFront9Bonus').value = r.front9Bonus;
   $('#ruleBack9Bonus').value = r.back9Bonus;
   $('#ruleRoundBonus').value = r.roundBonus;
@@ -2259,6 +2267,7 @@ function saveRules() {
     pressStyle: $('#rulePressStyle').value,
     maxPresses: parseInt($('#ruleMaxPresses').value, 10) || 0,
     finalPressHole: parseInt($('#ruleFinalPressHole').value, 10) || 10,
+    netScoreBonus: $('#ruleNetScoreBonus').value,
     front9Bonus: parseInt($('#ruleFront9Bonus').value, 10) || 0,
     back9Bonus: parseInt($('#ruleBack9Bonus').value, 10) || 0,
     roundBonus: parseInt($('#ruleRoundBonus').value, 10) || 0,
