@@ -190,6 +190,11 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .strokes-grid thead th.pname { background: var(--masters-green); color: var(--masters-cream); }
 .strokes-grid td.has { background: rgba(0,103,71,0.1); color: var(--masters-green-dark); font-weight: 700; }
 .strokes-grid td.total, .strokes-grid th.total { font-weight: 700; color: var(--masters-gold); background: rgba(201,169,97,0.08); }
+/* Scorecard total columns (Out/In/Tot): bold, NEUTRAL dark-green values so that gold is
+   reserved for the segment winner only. Header labels match the green header row. */
+.strokes-grid.sc-table td.total { color: var(--masters-green-dark); font-weight: 800; }
+.strokes-grid.sc-table thead th.total { background: var(--masters-green); color: var(--masters-cream); font-weight: 700; }
+.strokes-grid.sc-table td.total .sc-net { color: #8a8674; }
 /* Scorecard totals (sc-table): small gold "/net" beside gross, winner + in-progress marks */
 .strokes-grid .sc-net { font-size: 0.82em; color: var(--masters-gold); font-weight: 600; }
 .strokes-grid td.has .sc-net { color: var(--masters-green); }
