@@ -1,4 +1,4 @@
-# The WJZ Nasters 🏌️
+# The WJZ Nebrasters 🏌️
 
 A live skins-game tracker for Warren, Zac & Jon — "A Tradition Unlike Any Other."
 

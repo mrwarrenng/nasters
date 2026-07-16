@@ -1,4 +1,4 @@
-# The WJZ Nasters — Deployment Guide
+# The WJZ Nebrasters — Deployment Guide
 
 Deploy your skins game tracker so Warren, Zac, and Jon can all see live updates on their own phones during the trip.
 
@@ -49,7 +49,7 @@ const firebaseConfig = {
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // The Nasters: a single shared game document per room.
+    // The Nebrasters: a single shared game document per room.
     // Anyone who has the app URL + web config can read/write.
     // The obscure Netlify URL is the practical secret.
     match /nasters_state/{roomId} {
