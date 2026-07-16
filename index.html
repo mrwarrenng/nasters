@@ -193,7 +193,9 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 /* Scorecard totals (sc-table): small gold "/net" beside gross, winner + in-progress marks */
 .strokes-grid .sc-net { font-size: 0.82em; color: var(--masters-gold); font-weight: 600; }
 .strokes-grid td.has .sc-net { color: var(--masters-green); }
-.strokes-grid td.total.win { background: rgba(201,169,97,0.30); color: var(--masters-green-deep); }
+/* Segment winner (lowest net for the F9/B9/round bonus): solid gold fill so it clearly
+   stands out from the faint-gold non-winning subtotal cells. */
+.strokes-grid td.total.win { background: linear-gradient(180deg, var(--masters-gold-bright) 0%, var(--masters-gold) 100%); color: var(--masters-green-deep); font-weight: 800; box-shadow: inset 0 0 0 2px var(--masters-green-deep); }
 .strokes-grid td.total.win .sc-net { color: var(--masters-green-deep); }
 .strokes-grid .sc-star { color: #b0a98f; font-weight: 400; }
 /* Round Summary (Live): per-player skin-type breakdown chips */
@@ -1638,7 +1640,7 @@ function renderTotalsCard(round, course, comp) {
   div.innerHTML = '<div class="totals-card-header"><h4>Nine &amp; Round Totals</h4><div class="meta">Scorecard · read-only</div></div>'
     + '<div class="hole-card-body"><div class="strokes-grid-wrap"><table class="strokes-grid sc-table"><thead><tr>' + head + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
     + '<div class="totals-bonuses-label">Skins Earned · lowest net per segment</div><div class="totals-bonuses">' + bonusItems + '</div>'
-    + '<div style="font-family:Inter; font-size:10px; letter-spacing:.06em; color:#999; margin-top:10px;">Each hole shows <b>gross</b>; a <b>/net</b> appears only where a stroke is given. <b>Out</b>/<b>In</b>/<b>Tot</b> subtotal each nine and the round. “*” marks a nine still in progress.</div></div>';
+    + '<div style="font-family:Inter; font-size:10px; letter-spacing:.06em; color:#999; margin-top:10px;">Each hole shows <b>gross</b>; a <b>/net</b> appears only where a stroke is given. <b>Out</b>/<b>In</b>/<b>Tot</b> subtotal each nine and the round; the <b>gold</b> subtotal is that segment&rsquo;s bonus winner (lowest net). “*” marks a nine still in progress.</div></div>';
   return div;
 }
 
