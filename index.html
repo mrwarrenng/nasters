@@ -464,7 +464,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
       <div class="field"><label>Press Multiplier Style</label><select id="rulePressStyle"><option value="double">Double (×2)</option><option value="increment">Increment (+1×)</option></select></div>
       <div class="field"><label>Max Presses Per Round</label><input type="number" id="ruleMaxPresses" min="0" max="9" /></div>
       <div class="field"><label>Earliest Hole for Final Press</label><input type="number" id="ruleFinalPressHole" min="1" max="18" /><div class="helper">Default 10 = "back nine only"</div></div>
-      <div class="field"><label>Birdie / Eagle Bonus</label><select id="ruleNetScoreBonus"><option value="on">On</option><option value="off">Off</option></select><div class="helper">On: win a hole and add a bonus on top of its value, based on your GROSS score — true birdie +1× the hole's pressed value, true eagle +2×, true double eagle +3×.</div></div>
+      <div class="field"><label>Birdie / Eagle Bonus</label><select id="ruleNetScoreBonus"><option value="on">On</option><option value="off">Off</option></select><div class="helper">On: win a hole and add a bonus on top of its value, based on your GROSS score — true birdie +1× the hole's pressed value, true eagle +2×, true double eagle +3×. A gross par that nets to a birdie adds a single flat skin.</div></div>
       <div class="field"><label>Front Nine Bonus (skins)</label><input type="number" id="ruleFront9Bonus" min="0" /></div>
       <div class="field"><label>Back Nine Bonus (skins)</label><input type="number" id="ruleBack9Bonus" min="0" /></div>
       <div class="field"><label>Full Round Bonus (skins)</label><input type="number" id="ruleRoundBonus" min="0" /></div>
@@ -481,7 +481,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
   <div class="rule-grid">
     <div class="rule-item"><h4>Skins</h4><p>One skin per hole to the player with the lowest <em>net</em> score. Ties carry forward, compounding until won outright.</p></div>
     <div class="rule-item"><h4>Presses</h4><p>A player behind on round skins may press at the start of a hole. Doubles (or increments) per-hole skin value from the pressed hole onward — never on earlier holes, and never greenies (those stay fixed). Max 3; third needs back nine. Called a press on the wrong hole? Use its chip to move or cancel it — skins recalculate instantly.</p></div>
-    <div class="rule-item"><h4>Birdies &amp; Eagles</h4><p>Win a hole and, on top of its value (including presses), earn a bonus based on your <em>gross</em> score: a <em>true birdie</em> adds a bonus equal to the hole's pressed value; a <em>true eagle</em> adds twice it; a <em>true double eagle</em> adds three times it. (So a 2×-pressed hole won with a birdie pays 2 + 2 = 4; won with an eagle pays 2 + 4 = 6.) The bonus applies only to that hole's skin, not to carried-in skins, and can be switched off in the Rules settings.</p></div>
+    <div class="rule-item"><h4>Birdies &amp; Eagles</h4><p>Win a hole and, on top of its value (including presses), earn a bonus based on your <em>gross</em> score: a <em>true birdie</em> adds a bonus equal to the hole's pressed value; a <em>true eagle</em> adds twice it; a <em>true double eagle</em> adds three times it. (So a 2×-pressed hole won with a birdie pays 2 + 2 = 4; won with an eagle pays 2 + 4 = 6.) A <em>gross par</em> that nets to a birdie via handicap strokes adds a single flat bonus skin instead. The bonus applies only to that hole's skin, not to carried-in skins, and can be switched off in the Rules settings.</p></div>
     <div class="rule-item"><h4>Carryovers</h4><p>Each carried skin is locked at the value of the hole it was won on. A later press lifts only the holes from the press onward — it never re-values skins carried from before it.</p></div>
     <div class="rule-item"><h4>Greenies</h4><p>Closest to the pin in regulation on par-3s earns a greenie — a fixed skin value that presses and birdie/eagle bonuses never change.</p></div>
     <div class="rule-item"><h4>Reverse Greenies</h4><p>Three-putt your greenie? Lose it; every other player earns a reverse greenie, also a fixed skin value.</p></div>
@@ -533,7 +533,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
     <ol class="howto-list">
       <li><b>Start a round.</b> Go to <b>Today's Round</b>, pick the trip, course, tees and who's playing (handicaps pre-fill), then <b>Start Round</b>.</li>
       <li><b>Enter scores.</b> Tap a hole to open it, then use the <b>− / +</b> buttons to set each gross score — no keyboard needed. Net and strokes fill in automatically.</li>
-      <li><b>Skins.</b> Lowest <em>net</em> score wins the hole. Ties carry to the next hole. On a win you also earn a bonus based on your <em>gross</em> score: <b>true birdie</b> +1× the hole's pressed value, <b>true eagle</b> +2×, <b>true double eagle</b> +3× (toggle in Rules).</li>
+      <li><b>Skins.</b> Lowest <em>net</em> score wins the hole. Ties carry to the next hole. On a win you also earn a bonus based on your <em>gross</em> score: <b>true birdie</b> +1× the hole's pressed value, <b>true eagle</b> +2×, <b>true double eagle</b> +3×; a <b>gross par</b> that nets to a birdie adds +1 flat skin (toggle in Rules).</li>
       <li><b>Press.</b> Tap the red <b>(P)</b> on a hole to raise the stakes from that hole onward. Pick who's pressing — the current leader can't press.</li>
       <li><b>Greenies.</b> On par 3s, mark closest-to-the-pin — worth a fixed skin (presses and birdies/eagles don't change greenies). Three-putt it and everyone else gets a reverse greenie.</li>
       <li><b>Extra holes.</b> If skins are still carrying after 18, add a <b>Playoff Hole</b> (choose which hole it plays), or carry the pot into the next round when you finalize.</li>
@@ -1152,10 +1152,17 @@ function computeRoundSkins(round) {
         winnerIds = [winners[0][0]];
         const winnerGross = hole.scores ? hole.scores[winnerIds[0]] : null;
         const underParGross = (winnerGross != null && winnerGross !== '') ? (par - winnerGross) : 0;
+        const underParNet = par - low;   // low = winner's NET score
         let bonusVal = 0;
-        if (STATE.rules.netScoreBonus !== 'off' && underParGross >= 1) {
-          bonusVal = underParGross * mult;
-          birdieTag = underParGross >= 3 ? 'albatross' : underParGross === 2 ? 'eagle' : 'birdie';
+        if (STATE.rules.netScoreBonus !== 'off') {
+          if (underParGross >= 1) {
+            bonusVal = underParGross * mult;
+            birdieTag = underParGross >= 3 ? 'albatross' : underParGross === 2 ? 'eagle' : 'birdie';
+          } else if (winnerGross === par && underParNet >= 1) {
+            // Gross par that nets to a birdie (via handicap strokes) earns a single flat bonus skin.
+            bonusVal = 1;
+            birdieTag = 'netbirdie';
+          }
         }
         holeSkinValue = mult + bonusVal;
         holeSkinCount = holeSkinValue;   // app shows "skins" as press-weighted value units
@@ -1490,7 +1497,8 @@ function renderHoleCard(i, round, course, comp) {
       const money = fmt$(result.totalValueAwarded * STATE.rules.skinValue);
       const tag = result.birdieTag === 'albatross' ? ' <span class="skin-badge birdie">Albatross · +3× hole</span>'
                 : result.birdieTag === 'eagle' ? ' <span class="skin-badge birdie">Eagle · +2× hole</span>'
-                : result.birdieTag === 'birdie' ? ' <span class="skin-badge birdie">Birdie · +1× hole</span>' : '';
+                : result.birdieTag === 'birdie' ? ' <span class="skin-badge birdie">Birdie · +1× hole</span>'
+                : result.birdieTag === 'netbirdie' ? ' <span class="skin-badge birdie">Net Birdie · +1 skin</span>' : '';
       winBadge = '<span class="skin-badge">' + escapeHtml(w.name) + ' · ' + sw + ' skin' + (sw>1?'s':'') + ' · ' + money + '</span>' + tag;
     } else winBadge = '<span class="skin-badge carried">Tied · Carries</span>';
   }
