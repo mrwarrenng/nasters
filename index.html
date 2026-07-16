@@ -190,6 +190,12 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .strokes-grid thead th.pname { background: var(--masters-green); color: var(--masters-cream); }
 .strokes-grid td.has { background: rgba(0,103,71,0.1); color: var(--masters-green-dark); font-weight: 700; }
 .strokes-grid td.total, .strokes-grid th.total { font-weight: 700; color: var(--masters-gold); background: rgba(201,169,97,0.08); }
+/* Scorecard totals (sc-table): small gold "/net" beside gross, winner + in-progress marks */
+.strokes-grid .sc-net { font-size: 0.82em; color: var(--masters-gold); font-weight: 600; }
+.strokes-grid td.has .sc-net { color: var(--masters-green); }
+.strokes-grid td.total.win { background: rgba(201,169,97,0.30); color: var(--masters-green-deep); }
+.strokes-grid td.total.win .sc-net { color: var(--masters-green-deep); }
+.strokes-grid .sc-star { color: #b0a98f; font-weight: 400; }
 /* Round Summary (Live): per-player skin-type breakdown chips */
 .live-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
 .live-row:last-child { border-bottom: none; }
@@ -1550,9 +1556,11 @@ function renderHoleCard(i, round, course, comp) {
   return div;
 }
 
-// Read-only summary card: each player's NET stroke total for Front 9, Back 9 and
-// the full 18, plus the skins earned for lowest net over each segment (the F9/B9/
-// round bonuses). Self-calculates from the same engine output as the hole cards.
+// Read-only scorecard: hole-by-hole gross scores for each player with Out (front 9),
+// In (back 9) and Tot (round) subtotals — laid out like the Strokes Given grid. A
+// "/net" is shown next to a hole (and in a subtotal) only where a handicap stroke
+// applies. Below the grid, the skins earned for lowest net over each segment (the
+// F9/B9/round bonuses). Self-calculates from the same engine output as the hole cards.
 function renderTotalsCard(round, course, comp) {
   const hr = comp.holeResults;
   const players = round.players;
@@ -1561,37 +1569,56 @@ function renderTotalsCard(round, course, comp) {
     { key: 'back9',  label: 'Back 9',  s: 9, e: 18, bonus: STATE.rules.back9Bonus },
     { key: 'round',  label: 'Total 18', s: 0, e: 18, bonus: STATE.rules.roundBonus }
   ];
-  // Traditional scorecard totals: sum gross (actual strokes) AND net (after handicap)
-  // for each segment, counting only holes where a score has been entered. Shown as
-  // "gross / net" so scores can be transcribed straight into GHIN after the round.
-  function segTotals(pid, s, e) {
+  // Per-hole gross/net for one player. Gross is the actual strokes taken; net is
+  // gross minus handicap strokes on that hole. Returns null if no score entered.
+  function holeScore(pid, i) {
+    const gv = (round.holes[i] && round.holes[i].scores) ? round.holes[i].scores[pid] : null;
+    if (gv == null || gv === '') return null;
+    const nv = hr[i].nets[pid];
+    return { gross: Number(gv), net: (nv == null ? Number(gv) : nv) };
+  }
+  // Segment subtotal (Out / In / Tot), summing only entered holes.
+  function segSum(pid, s, e) {
     let gross = 0, net = 0, entered = 0;
-    for (let i = s; i < e; i++) {
-      const nv = hr[i].nets[pid];
-      if (nv == null) continue;
-      const gv = (round.holes[i] && round.holes[i].scores) ? round.holes[i].scores[pid] : null;
-      if (gv == null || gv === '') continue;
-      gross += Number(gv); net += nv; entered++;
+    for (let i = s; i < e; i++) { const c = holeScore(pid, i); if (!c) continue; gross += c.gross; net += c.net; entered++; }
+    return { gross, net, entered, complete: entered === (e - s) };
+  }
+  // A hole cell shows just the gross number; a "/net" is appended ONLY when the
+  // player was given a stroke on that hole (so net differs from gross).
+  function holeCell(pid, i) {
+    const c = holeScore(pid, i);
+    if (!c) return '<td></td>';
+    if (c.net < c.gross) return '<td class="has">' + c.gross + '<span class="sc-net">/' + c.net + '</span></td>';
+    return '<td>' + c.gross + '</td>';
+  }
+  // A subtotal cell (Out/In/Tot): gross, plus /net when strokes applied in the span.
+  function subCell(pid, s, e, segKey) {
+    const t = segSum(pid, s, e);
+    const isWin = (comp.bonuses[segKey] || []).includes(pid);
+    let inner;
+    if (t.entered === 0) inner = '—';
+    else {
+      inner = t.net < t.gross ? (t.gross + '<span class="sc-net">/' + t.net + '</span>') : String(t.gross);
+      if (!t.complete) inner += ' <span class="sc-star">*</span>';
     }
-    return { gross, net, entered, total: e - s, complete: entered === (e - s) };
+    return '<td class="total' + (isWin ? ' win' : '') + '">' + inner + '</td>';
   }
   const div = document.createElement('div');
   div.className = 'hole-card totals-card open';
-  const headCells = players.map(pid => {
-    const p = STATE.players.find(pl => pl.id === pid);
-    return '<th>' + escapeHtml(p ? p.name : '?') + '</th>';
-  }).join('');
-  const rows = segments.map(seg => {
-    const winners = comp.bonuses[seg.key] || [];        // populated only when the segment is complete for all players
-    const cells = players.map(pid => {
-      const n = segTotals(pid, seg.s, seg.e);
-      const isWin = winners.includes(pid);
-      const cls = 'net' + (isWin ? ' win' : '') + (!n.complete && n.entered > 0 ? ' partial' : '');
-      const val = n.entered === 0 ? '—'
-        : (n.gross + '<span class="tt-net">/' + n.net + '</span>' + (!n.complete ? ' *' : ''));
-      return '<td class="' + cls + '">' + val + '</td>';
-    }).join('');
-    return '<tr><td class="seg">' + seg.label + '</td>' + cells + '</tr>';
+  let head = '<th class="pname">Player</th>';
+  for (let i = 1; i <= 9; i++) head += '<th>' + i + '</th>';
+  head += '<th class="total">Out</th>';
+  for (let i = 10; i <= 18; i++) head += '<th>' + i + '</th>';
+  head += '<th class="total">In</th><th class="total">Tot</th>';
+  const rows = players.map(pid => {
+    const p = STATE.players.find(x => x.id === pid);
+    let cells = '';
+    for (let i = 0; i < 9; i++) cells += holeCell(pid, i);
+    cells += subCell(pid, 0, 9, 'front9');
+    for (let i = 9; i < 18; i++) cells += holeCell(pid, i);
+    cells += subCell(pid, 9, 18, 'back9');
+    cells += subCell(pid, 0, 18, 'round');
+    return '<tr><th class="pname">' + escapeHtml(p ? p.name : '?') + '</th>' + cells + '</tr>';
   }).join('');
   // Skins earned per segment go BELOW the net table (as wrapping rows) so the long
   // "+N → winner" text never spills out of the card on a phone.
@@ -1608,10 +1635,10 @@ function renderTotalsCard(round, course, comp) {
     }
     return '<div class="tb-item"><span class="tb-seg">' + seg.label + '</span><span class="tb-val">' + val + '</span></div>';
   }).join('');
-  div.innerHTML = '<div class="totals-card-header"><h4>Nine &amp; Round Totals</h4><div class="meta">Gross / Net · read-only</div></div>'
-    + '<div class="hole-card-body"><table class="totals-table"><thead><tr><th class="seg">Gross <span class="tt-net">/ Net</span></th>' + headCells + '</tr></thead><tbody>' + rows + '</tbody></table>'
+  div.innerHTML = '<div class="totals-card-header"><h4>Nine &amp; Round Totals</h4><div class="meta">Scorecard · read-only</div></div>'
+    + '<div class="hole-card-body"><div class="strokes-grid-wrap"><table class="strokes-grid sc-table"><thead><tr>' + head + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
     + '<div class="totals-bonuses-label">Skins Earned · lowest net per segment</div><div class="totals-bonuses">' + bonusItems + '</div>'
-    + '<div style="font-family:Inter; font-size:10px; letter-spacing:.06em; color:#999; margin-top:10px;">Each cell is <b>gross / net</b> — hand-enter gross into GHIN. “*” marks a segment still in progress.</div></div>';
+    + '<div style="font-family:Inter; font-size:10px; letter-spacing:.06em; color:#999; margin-top:10px;">Each hole shows <b>gross</b>; a <b>/net</b> appears only where a stroke is given. <b>Out</b>/<b>In</b>/<b>Tot</b> subtotal each nine and the round. “*” marks a nine still in progress.</div></div>';
   return div;
 }
 
