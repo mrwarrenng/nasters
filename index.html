@@ -218,6 +218,27 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .rd-table td.rd-tot { font-weight: 700; color: var(--masters-green-dark); }
 .rd-table td.rd-skins { font-family: 'Playfair Display', serif; font-weight: 700; color: var(--masters-gold); font-size: 16px; }
 .rd-table .rd-money { font-family: 'Inter', sans-serif; font-weight: 500; font-size: 10px; color: #888; }
+.rd-pname-row { display: flex; align-items: center; gap: 7px; }
+.rd-flag { background: none; border: none; padding: 3px; margin: -3px 0; cursor: pointer; line-height: 0; flex-shrink: 0; border-radius: 4px; }
+.rd-flag:hover, .rd-flag:focus-visible { background: rgba(201,169,97,0.16); outline: none; }
+.rd-flag-ic line { stroke: var(--masters-green); stroke-width: 2; stroke-linecap: round; }
+.rd-flag-ic path { fill: var(--masters-gold); }
+.rd-flag-ic circle { fill: var(--masters-green); }
+.rd-flag:hover .rd-flag-ic path { fill: var(--masters-gold-bright); }
+/* Per-player scorecard modal (par / gross / net by hole) */
+.psc-nine-label { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--masters-gold); margin: 12px 0 6px; }
+.psc-table { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; margin-bottom: 4px; }
+.psc-table th, .psc-table td { border: 1px solid var(--rule); padding: 6px 4px; text-align: center; font-size: 13px; min-width: 26px; }
+.psc-table thead th { background: var(--masters-green); color: var(--masters-cream); font-weight: 600; font-size: 12px; }
+.psc-table tbody th { text-align: left; font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #888; font-weight: 600; background: var(--masters-ivory); white-space: nowrap; }
+.psc-table thead th.total, .psc-table td.total { background: rgba(201,169,97,0.14); font-weight: 800; color: var(--masters-green-dark); }
+.psc-table thead th.total { background: var(--masters-green); color: var(--masters-gold-bright); }
+.psc-table tr.psc-gross td { font-weight: 700; color: var(--masters-green-dark); }
+.psc-table tr.psc-net td { color: #666; }
+.psc-table td.psc-stroke { background: rgba(0,103,71,0.12); color: var(--masters-green-dark); font-weight: 700; }
+.psc-total { font-family: 'Playfair Display', serif; font-style: italic; color: var(--masters-green-dark); font-size: 16px; margin-top: 12px; }
+.psc-total b { color: var(--masters-gold); font-style: normal; }
+.psc-hint { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.04em; color: #999; margin-top: 8px; }
 /* Rounds tab: stack the header row above the detail table */
 .round-history-item.rhi-detailed { flex-direction: column; align-items: stretch; }
 .rhi-top { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
@@ -626,6 +647,17 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeModal('editCourseModal')">Cancel</button>
       <button class="btn btn-primary" id="saveEditedCourseBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="playerScorecardModal">
+  <div class="modal" style="max-width: 520px;">
+    <h3 id="playerScorecardTitle" style="margin-bottom:4px;">Scorecard</h3>
+    <div id="playerScorecardMeta" style="font-family:Inter; font-size:11px; color:#777; letter-spacing:.04em; margin-bottom:14px;"></div>
+    <div id="playerScorecardBody"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="closeModal('playerScorecardModal')">Done</button>
     </div>
   </div>
 </div>
@@ -1341,6 +1373,69 @@ function skinsSynthesis(comp, pid) {
   return parts.join(' · ');
 }
 
+// Small golf flagstick icon (pole + pennant), used as the per-player scorecard button.
+const FLAGSTICK_SVG = '<svg class="rd-flag-ic" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><line x1="6" y1="2.5" x2="6" y2="21.5"/><path d="M6 3.2 L17 6 L6 8.8 Z"/><circle cx="6" cy="21.5" r="1.7"/></svg>';
+
+// Open a read-only scorecard for a single player in a round: hole-by-hole par / gross / net
+// with Out / In / Tot, mirroring the app's scorecards — handy for entering into GHIN.
+function showPlayerScorecard(roundId, pid) {
+  const round = STATE.rounds.find(r => r.id === roundId) || (STATE.activeRound && STATE.activeRound.id === roundId ? STATE.activeRound : null);
+  if (!round) { showToast('Round not found'); return; }
+  const comp = computeRoundSkins(round);
+  const course = courseForRound(round);
+  const p = STATE.players.find(x => x.id === pid) || { name: '?' };
+  const hr = comp.holeResults;
+  const cell = i => {
+    const gv = (round.holes[i] && round.holes[i].scores) ? round.holes[i].scores[pid] : null;
+    if (gv == null || gv === '') return { par: course ? course.pars[i] : null, gross: null, net: null, str: 0 };
+    const nv = hr[i] ? hr[i].nets[pid] : null;
+    const gross = Number(gv), net = (nv == null ? gross : nv);
+    return { par: course ? course.pars[i] : null, gross, net, str: gross - net };
+  };
+  function seg(s, e) {
+    let par = 0, gross = 0, net = 0, ent = 0, pent = 0;
+    for (let i = s; i < e; i++) {
+      const c = cell(i);
+      if (course) { par += (course.pars[i] || 0); pent++; }
+      if (c.gross != null) { gross += c.gross; net += c.net; ent++; }
+    }
+    return { par: pent ? par : null, gross: ent ? gross : null, net: ent ? net : null, complete: ent === (e - s) };
+  }
+  // Build a nine's rows (Hole / Par / Gross / Net) plus its subtotal row.
+  function nineRows(s, e, subLabel) {
+    let holeR = '<tr class="psc-hole"><th>Hole</th>', parR = '<tr><th>Par</th>', grR = '<tr class="psc-gross"><th>Gross</th>', netR = '<tr class="psc-net"><th>Net</th>';
+    for (let i = s; i < e; i++) {
+      const c = cell(i);
+      holeR += '<th>' + (i + 1) + '</th>';
+      parR += '<td>' + (c.par != null ? c.par : '') + '</td>';
+      grR += '<td>' + (c.gross != null ? c.gross : '') + '</td>';
+      netR += '<td class="' + (c.str > 0 ? 'psc-stroke' : '') + '">' + (c.net != null ? c.net : '') + '</td>';
+    }
+    const sub = seg(s, e);
+    const star = sub.complete ? '' : ' <span class="sc-star">*</span>';
+    holeR += '<th class="total">' + subLabel + '</th></tr>';
+    parR += '<td class="total">' + (sub.par != null ? sub.par : '') + '</td></tr>';
+    grR += '<td class="total">' + (sub.gross != null ? sub.gross + star : '') + '</td></tr>';
+    netR += '<td class="total">' + (sub.net != null ? sub.net : '') + '</td></tr>';
+    return '<table class="psc-table"><thead>' + holeR + '</thead><tbody>' + parR + grR + netR + '</tbody></table>';
+  }
+  const tot = seg(0, 18);
+  const chGiven = comp.fullHcps ? comp.fullHcps[pid] : null;   // course handicap (strokes)
+  const meta = (course ? escapeHtml(course.name) : 'Course') + ' — ' + escapeHtml(round.date)
+    + (round.label ? ' · ' + escapeHtml(round.label) : '') + ' · ' + escapeHtml(round.teeName || '') + ' tees'
+    + (chGiven != null ? ' · Course HCP ' + chGiven : '');
+  const totLine = '<div class="psc-total">Total <b>' + (tot.gross != null ? tot.gross : '—') + '</b> gross · <b>' + (tot.net != null ? tot.net : '—') + '</b> net'
+    + (tot.par != null && tot.gross != null ? ' · ' + (tot.gross - tot.par >= 0 ? '+' : '') + (tot.gross - tot.par) + ' to par' : '') + '</div>';
+  $('#playerScorecardTitle').textContent = p.name;
+  $('#playerScorecardMeta').textContent = meta;
+  $('#playerScorecardBody').innerHTML =
+    '<div class="psc-nine-label">Front 9</div>' + nineRows(0, 9, 'Out')
+    + '<div class="psc-nine-label">Back 9</div>' + nineRows(9, 18, 'In')
+    + totLine
+    + '<div class="psc-hint">Enter the <b>Gross</b> row into GHIN. Shaded net cells are holes where a handicap stroke was received. “*” marks a nine still in progress.</div>';
+  openModal('playerScorecardModal');
+}
+
 // A compact per-player table for a round: gross/net Out/In/Tot, skins and winnings.
 function roundDetailTable(round) {
   const comp = computeRoundSkins(round);
@@ -1351,7 +1446,9 @@ function roundDetailTable(round) {
     const sc = playerSegScores(round, comp, pid);
     const skins = comp.perPlayer[pid] || 0;
     const syn = skinsSynthesis(comp, pid);
-    return '<tr><td class="rd-name"><div class="rd-pname">' + escapeHtml(p.name) + '</div>'
+    // Flagstick button opens a read-only per-player scorecard (for hand-entering into GHIN).
+    const flag = '<button class="rd-flag" type="button" onclick="showPlayerScorecard(\'' + round.id + '\',\'' + pid + '\')" title="View ' + escapeHtml(p.name) + '’s scorecard" aria-label="View scorecard">' + FLAGSTICK_SVG + '</button>';
+    return '<tr><td class="rd-name"><div class="rd-pname-row">' + flag + '<span class="rd-pname">' + escapeHtml(p.name) + '</span></div>'
       + (syn ? '<div class="rd-syn">' + syn + '</div>' : '<div class="rd-syn rd-none">no skins</div>') + '</td>'
       + '<td>' + gn(sc.front) + '</td><td>' + gn(sc.back) + '</td><td class="rd-tot">' + gn(sc.tot) + '</td>'
       + '<td class="rd-skins">' + formatSkins(skins) + '<div class="rd-money">' + fmt$(skins * STATE.rules.skinValue) + '</div></td></tr>';
@@ -2614,6 +2711,7 @@ window.setScore = setScore;
 window.setGreenie = setGreenie;
 window.setThreePutt = setThreePutt;
 window.editPlayer = editPlayer;
+window.showPlayerScorecard = showPlayerScorecard;
 window.deletePlayer = deletePlayer;
 window.deleteCourse = deleteCourse;
 window.deleteRound = deleteRound;
