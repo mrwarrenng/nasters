@@ -203,28 +203,28 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .strokes-grid td.total.win { background: linear-gradient(180deg, var(--masters-gold-bright) 0%, var(--masters-gold) 100%); color: var(--masters-green-deep); font-weight: 800; box-shadow: inset 0 0 0 2px var(--masters-green-deep); }
 .strokes-grid td.total.win .sc-net { color: var(--masters-green-deep); }
 .strokes-grid .sc-star { color: #b0a98f; font-weight: 400; }
-/* Round detail table — per-player gross/net Out/In/Tot, skins & winnings; shared by the
-   Leaderboard Round Recap and the Rounds tab. */
-.rd-wrap { width: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; }
-.rd-table { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; }
-.rd-table th, .rd-table td { border-bottom: 1px solid var(--rule); padding: 7px 8px; text-align: center; font-size: 13px; white-space: nowrap; vertical-align: middle; }
-.rd-table tbody tr:last-child td { border-bottom: none; }
-.rd-table thead th { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: #999; font-weight: 600; }
-.rd-table th.rd-name, .rd-table td.rd-name { text-align: left; }
-.rd-table .rd-pname { font-family: 'Playfair Display', serif; font-style: italic; font-size: 15px; color: var(--masters-green-dark); }
-.rd-table .rd-syn { font-size: 10px; color: #8a8674; letter-spacing: 0.02em; margin-top: 1px; white-space: normal; }
-.rd-table .rd-syn.rd-none { color: #bbb; font-style: italic; }
-.rd-table .rd-net { font-size: 0.8em; color: #8a8674; font-weight: 600; }
-.rd-table td.rd-tot { font-weight: 700; color: var(--masters-green-dark); }
-.rd-table td.rd-skins { font-family: 'Playfair Display', serif; font-weight: 700; color: var(--masters-gold); font-size: 16px; }
-.rd-table .rd-money { font-family: 'Inter', sans-serif; font-weight: 500; font-size: 10px; color: #888; }
-.rd-pname-row { display: flex; align-items: center; gap: 7px; }
-.rd-flag { background: none; border: none; padding: 3px; margin: -3px 0; cursor: pointer; line-height: 0; flex-shrink: 0; border-radius: 4px; }
-.rd-flag:hover, .rd-flag:focus-visible { background: rgba(201,169,97,0.16); outline: none; }
-.rd-flag-ic line { stroke: var(--masters-green); stroke-width: 2; stroke-linecap: round; }
-.rd-flag-ic path { fill: var(--masters-gold); }
-.rd-flag-ic circle { fill: var(--masters-green); }
-.rd-flag:hover .rd-flag-ic path { fill: var(--masters-gold-bright); }
+/* Round detail — per-player block (skins, gross/net Out/In/Total tiles, scorecard button);
+   shared by the Leaderboard Round Recap and the Rounds tab. Built to fit a phone width. */
+.rd-players { display: flex; flex-direction: column; gap: 14px; margin-top: 12px; }
+.rd-player { border: 1px solid var(--rule); border-radius: var(--radius-sm); padding: 12px 14px; background: var(--masters-ivory); }
+.rd-player-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.rd-pname { font-family: 'Playfair Display', serif; font-style: italic; font-size: 18px; color: var(--masters-green-dark); }
+.rd-skins-inline { font-family: 'Playfair Display', serif; font-weight: 700; color: var(--masters-gold); font-size: 16px; white-space: nowrap; }
+.rd-skins-inline .rd-money { font-family: 'Inter', sans-serif; font-weight: 500; font-size: 11px; color: #888; margin-left: 5px; }
+.rd-syn { font-size: 11px; color: #8a8674; letter-spacing: 0.02em; margin-top: 3px; }
+.rd-syn.rd-none { color: #bbb; font-style: italic; }
+.rd-segrow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 11px 0; }
+.rd-seg { background: #fff; border: 1px solid var(--rule); border-radius: 4px; padding: 7px 4px; text-align: center; }
+.rd-seg-lbl { font-family: 'Inter', sans-serif; font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: #999; }
+.rd-seg-val { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--masters-green-dark); margin-top: 3px; }
+.rd-seg-val.rd-seg-tot { font-weight: 700; }
+.rd-net { font-size: 0.72em; color: #8a8674; font-weight: 600; }
+.rd-scorecard-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 10px; background: var(--masters-green); color: var(--masters-cream); border: none; border-radius: 4px; cursor: pointer; font-family: 'Inter', sans-serif; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; }
+.rd-scorecard-btn:hover { background: var(--masters-green-deep); }
+.rd-scorecard-btn .rd-flag-ic { flex-shrink: 0; }
+.rd-scorecard-btn .rd-flag-ic line { stroke: var(--masters-gold-bright); stroke-width: 2; stroke-linecap: round; }
+.rd-scorecard-btn .rd-flag-ic path { fill: var(--masters-gold-bright); }
+.rd-scorecard-btn .rd-flag-ic circle { fill: var(--masters-gold-bright); }
 /* Per-player scorecard modal (par / gross / net by hole) */
 .psc-nine-label { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--masters-gold); margin: 12px 0 6px; }
 .psc-table { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; margin-bottom: 4px; }
@@ -1436,24 +1436,30 @@ function showPlayerScorecard(roundId, pid) {
   openModal('playerScorecardModal');
 }
 
-// A compact per-player table for a round: gross/net Out/In/Tot, skins and winnings.
+// A mobile-friendly per-player breakdown for a round: skins/winnings, gross/net Out/In/Total
+// stat tiles, and a "View Scorecard" button (opens the per-player scorecard for GHIN entry).
 function roundDetailTable(round) {
   const comp = computeRoundSkins(round);
   const players = round.players.slice().sort((a, b) => (comp.perPlayer[b] || 0) - (comp.perPlayer[a] || 0));
   const gn = s => s.any ? (s.g + '<span class="rd-net">/' + s.n + '</span>') : '—';
-  const rows = players.map(pid => {
+  const blocks = players.map(pid => {
     const p = STATE.players.find(x => x.id === pid) || { name: '?' };
     const sc = playerSegScores(round, comp, pid);
     const skins = comp.perPlayer[pid] || 0;
     const syn = skinsSynthesis(comp, pid);
-    // Flagstick button opens a read-only per-player scorecard (for hand-entering into GHIN).
-    const flag = '<button class="rd-flag" type="button" onclick="showPlayerScorecard(\'' + round.id + '\',\'' + pid + '\')" title="View ' + escapeHtml(p.name) + '’s scorecard" aria-label="View scorecard">' + FLAGSTICK_SVG + '</button>';
-    return '<tr><td class="rd-name"><div class="rd-pname-row">' + flag + '<span class="rd-pname">' + escapeHtml(p.name) + '</span></div>'
-      + (syn ? '<div class="rd-syn">' + syn + '</div>' : '<div class="rd-syn rd-none">no skins</div>') + '</td>'
-      + '<td>' + gn(sc.front) + '</td><td>' + gn(sc.back) + '</td><td class="rd-tot">' + gn(sc.tot) + '</td>'
-      + '<td class="rd-skins">' + formatSkins(skins) + '<div class="rd-money">' + fmt$(skins * STATE.rules.skinValue) + '</div></td></tr>';
+    return '<div class="rd-player">'
+      + '<div class="rd-player-top"><div class="rd-pname">' + escapeHtml(p.name) + '</div>'
+      + '<div class="rd-skins-inline">' + formatSkins(skins) + ' skins<span class="rd-money">' + fmt$(skins * STATE.rules.skinValue) + '</span></div></div>'
+      + (syn ? '<div class="rd-syn">' + syn + '</div>' : '<div class="rd-syn rd-none">no skins</div>')
+      + '<div class="rd-segrow">'
+      + '<div class="rd-seg"><div class="rd-seg-lbl">Out</div><div class="rd-seg-val">' + gn(sc.front) + '</div></div>'
+      + '<div class="rd-seg"><div class="rd-seg-lbl">In</div><div class="rd-seg-val">' + gn(sc.back) + '</div></div>'
+      + '<div class="rd-seg"><div class="rd-seg-lbl">Total</div><div class="rd-seg-val rd-seg-tot">' + gn(sc.tot) + '</div></div>'
+      + '</div>'
+      + '<button class="rd-scorecard-btn" type="button" onclick="showPlayerScorecard(\'' + round.id + '\',\'' + pid + '\')" aria-label="View ' + escapeHtml(p.name) + '’s scorecard">' + FLAGSTICK_SVG + '<span>View Scorecard</span></button>'
+      + '</div>';
   }).join('');
-  return '<div class="rd-wrap"><table class="rd-table"><thead><tr><th class="rd-name">Player</th><th>Out</th><th>In</th><th>Tot</th><th>Skins</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  return '<div class="rd-players">' + blocks + '</div>';
 }
 
 // All-time skins earned per player across every finalized round in the ledger.
@@ -1491,10 +1497,8 @@ function renderLeaderboard() {
     recapBody.innerHTML = recent.map(r => {
       const comp = computeRoundSkins(r);
       const course = courseForRound(r);
-      const top = Object.entries(comp.perPlayer).sort((a,b)=>b[1]-a[1])[0];
-      const topName = top ? (STATE.players.find(p=>p.id===top[0])||{}).name : '—';
       const totSkins = Object.values(comp.perPlayer).reduce((s,v)=>s+v,0);
-      return '<div class="recap-entry"><div class="recap-head"><div><div style="font-family:Playfair Display; font-size:18px; color:var(--masters-green-dark);">' + escapeHtml(course ? course.name : 'Course') + ' — ' + escapeHtml(r.date) + (r.label ? ' · ' + escapeHtml(r.label) : '') + '</div><div style="font-family:Inter; font-size:11px; color:#666; letter-spacing:.05em;">' + r.players.length + ' players · ' + escapeHtml(r.teeName) + ' · ' + (r.presses||[]).length + ' press(es) · ' + formatSkins(totSkins) + ' skins (' + fmt$(totSkins * STATE.rules.skinValue) + ')</div></div><div style="text-align:right;"><div style="font-family:Playfair Display; font-style:italic; color:var(--masters-gold); font-size:14px;">Top: ' + escapeHtml(topName||'—') + '</div><div style="font-family:Playfair Display; font-style:italic; color:var(--masters-green-dark); font-size:20px;">' + (top ? formatSkins(top[1]) + ' skins' : '') + '</div></div></div>' + roundDetailTable(r) + '</div>';
+      return '<div class="recap-entry"><div class="recap-head"><div><div style="font-family:Playfair Display; font-size:18px; color:var(--masters-green-dark);">' + escapeHtml(course ? course.name : 'Course') + ' — ' + escapeHtml(r.date) + (r.label ? ' · ' + escapeHtml(r.label) : '') + '</div><div style="font-family:Inter; font-size:11px; color:#666; letter-spacing:.05em;">' + r.players.length + ' players · ' + escapeHtml(r.teeName) + ' · ' + (r.presses||[]).length + ' press(es) · ' + formatSkins(totSkins) + ' skins (' + fmt$(totSkins * STATE.rules.skinValue) + ')</div></div></div>' + roundDetailTable(r) + '</div>';
     }).join('');
   }
 }
