@@ -203,6 +203,32 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .strokes-grid td.total.win { background: linear-gradient(180deg, var(--masters-gold-bright) 0%, var(--masters-gold) 100%); color: var(--masters-green-deep); font-weight: 800; box-shadow: inset 0 0 0 2px var(--masters-green-deep); }
 .strokes-grid td.total.win .sc-net { color: var(--masters-green-deep); }
 .strokes-grid .sc-star { color: #b0a98f; font-weight: 400; }
+/* Round detail table — per-player gross/net Out/In/Tot, skins & winnings; shared by the
+   Leaderboard Round Recap and the Rounds tab. */
+.rd-wrap { width: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 10px; }
+.rd-table { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; }
+.rd-table th, .rd-table td { border-bottom: 1px solid var(--rule); padding: 7px 8px; text-align: center; font-size: 13px; white-space: nowrap; vertical-align: middle; }
+.rd-table tbody tr:last-child td { border-bottom: none; }
+.rd-table thead th { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: #999; font-weight: 600; }
+.rd-table th.rd-name, .rd-table td.rd-name { text-align: left; }
+.rd-table .rd-pname { font-family: 'Playfair Display', serif; font-style: italic; font-size: 15px; color: var(--masters-green-dark); }
+.rd-table .rd-syn { font-size: 10px; color: #8a8674; letter-spacing: 0.02em; margin-top: 1px; white-space: normal; }
+.rd-table .rd-syn.rd-none { color: #bbb; font-style: italic; }
+.rd-table .rd-net { font-size: 0.8em; color: #8a8674; font-weight: 600; }
+.rd-table td.rd-tot { font-weight: 700; color: var(--masters-green-dark); }
+.rd-table td.rd-skins { font-family: 'Playfair Display', serif; font-weight: 700; color: var(--masters-gold); font-size: 16px; }
+.rd-table .rd-money { font-family: 'Inter', sans-serif; font-weight: 500; font-size: 10px; color: #888; }
+/* Rounds tab: stack the header row above the detail table */
+.round-history-item.rhi-detailed { flex-direction: column; align-items: stretch; }
+.rhi-top { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+.rhi-detail { margin-top: 4px; }
+/* Leaderboard recap entry */
+.recap-entry { padding: 12px 0; border-bottom: 1px solid var(--rule); }
+.recap-entry:last-child { border-bottom: none; }
+.recap-head { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+/* Players tab: career skins line */
+.player-card-career { font-family: 'Playfair Display', serif; font-style: italic; color: var(--masters-gold); font-size: 15px; margin-top: 4px; }
+.player-card-career b { font-weight: 700; font-style: normal; }
 /* Round Summary (Live): per-player skin-type breakdown chips */
 .live-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
 .live-row:last-child { border-bottom: none; }
@@ -997,11 +1023,18 @@ async function loadState() {
 // the current hole. Runs once at load — remote sync updates don't re-trigger it.
 function focusCurrentRound() {
   if (!STATE.activeRound) return;
-  switchPanel('round');
-  const noh = nextOpenHole(STATE.activeRound);
+  switchPanel('round');   // switchPanel focuses the current hole when a round is active
+}
+
+// Open the current (next unscored) hole card and scroll it into view. Called whenever the
+// Today's Round panel becomes active while a round is in progress.
+function focusActiveRoundHole() {
+  const round = STATE.activeRound;
+  if (!round) return;
+  const noh = nextOpenHole(round);
   const idx = noh ? noh - 1 : 0;
-  if (!STATE.activeRound._holeOverride || typeof STATE.activeRound._holeOverride !== 'object') STATE.activeRound._holeOverride = {};
-  STATE.activeRound._holeOverride[idx] = true;
+  if (!round._holeOverride || typeof round._holeOverride !== 'object') round._holeOverride = {};
+  round._holeOverride[idx] = true;
   renderActiveRound();
   setTimeout(() => {
     const card = document.querySelector('#holesContainer .hole-card[data-hole-idx="' + idx + '"]');
@@ -1277,6 +1310,65 @@ function getScopedRounds() {
   return { filter: r => r.tripId === tripId, label: 'Trip · ' + (trip ? trip.name : '—') };
 }
 
+// ---- Shared round-detail helpers (used by Leaderboard recap and Rounds tab) ----
+// Per-player gross/net for Front 9, Back 9 and the full round, counting only entered holes.
+function playerSegScores(round, comp, pid) {
+  const hr = comp.holeResults;
+  function seg(s, e) {
+    let g = 0, n = 0, any = false;
+    for (let i = s; i < e; i++) {
+      const gv = (round.holes[i] && round.holes[i].scores) ? round.holes[i].scores[pid] : null;
+      const nv = hr[i] ? hr[i].nets[pid] : null;
+      if (gv == null || gv === '' || nv == null) continue;
+      g += Number(gv); n += nv; any = true;
+    }
+    return { g, n, any };
+  }
+  return { front: seg(0, 9), back: seg(9, 18), tot: seg(0, 18) };
+}
+
+// Short human synthesis of how a player earned their skins in a round.
+function skinsSynthesis(comp, pid) {
+  const b = comp.breakdown ? comp.breakdown[pid] : null;
+  if (!b) return '';
+  const parts = [];
+  if (b.holesWon > 0) parts.push(b.holesWon + ' hole' + (b.holesWon === 1 ? '' : 's') + ' (' + formatSkins(b.holeSkins) + ')');
+  if (b.greenieCount > 0) parts.push(b.greenieCount + ' greenie' + (b.greenieCount === 1 ? '' : 's') + ' (' + formatSkins(b.greenies) + ')');
+  if (b.reverseGreenies > 0) parts.push('reverse greenie (' + formatSkins(b.reverseGreenies) + ')');
+  if (b.front9 > 0) parts.push('Front 9 +' + formatSkins(b.front9));
+  if (b.back9 > 0) parts.push('Back 9 +' + formatSkins(b.back9));
+  if (b.round > 0) parts.push('Round +' + formatSkins(b.round));
+  return parts.join(' · ');
+}
+
+// A compact per-player table for a round: gross/net Out/In/Tot, skins and winnings.
+function roundDetailTable(round) {
+  const comp = computeRoundSkins(round);
+  const players = round.players.slice().sort((a, b) => (comp.perPlayer[b] || 0) - (comp.perPlayer[a] || 0));
+  const gn = s => s.any ? (s.g + '<span class="rd-net">/' + s.n + '</span>') : '—';
+  const rows = players.map(pid => {
+    const p = STATE.players.find(x => x.id === pid) || { name: '?' };
+    const sc = playerSegScores(round, comp, pid);
+    const skins = comp.perPlayer[pid] || 0;
+    const syn = skinsSynthesis(comp, pid);
+    return '<tr><td class="rd-name"><div class="rd-pname">' + escapeHtml(p.name) + '</div>'
+      + (syn ? '<div class="rd-syn">' + syn + '</div>' : '<div class="rd-syn rd-none">no skins</div>') + '</td>'
+      + '<td>' + gn(sc.front) + '</td><td>' + gn(sc.back) + '</td><td class="rd-tot">' + gn(sc.tot) + '</td>'
+      + '<td class="rd-skins">' + formatSkins(skins) + '<div class="rd-money">' + fmt$(skins * STATE.rules.skinValue) + '</div></td></tr>';
+  }).join('');
+  return '<div class="rd-wrap"><table class="rd-table"><thead><tr><th class="rd-name">Player</th><th>Out</th><th>In</th><th>Tot</th><th>Skins</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+}
+
+// All-time skins earned per player across every finalized round in the ledger.
+function allTimeSkinsMap() {
+  const map = {};
+  STATE.rounds.forEach(r => {
+    const comp = computeRoundSkins(r);
+    Object.entries(comp.perPlayer).forEach(([pid, v]) => { map[pid] = (map[pid] || 0) + v; });
+  });
+  return map;
+}
+
 function renderLeaderboard() {
   const scope = getScopedRounds();
   $('#leaderboardScopeLabel').textContent = scope.label;
@@ -1304,7 +1396,8 @@ function renderLeaderboard() {
       const course = courseForRound(r);
       const top = Object.entries(comp.perPlayer).sort((a,b)=>b[1]-a[1])[0];
       const topName = top ? (STATE.players.find(p=>p.id===top[0])||{}).name : '—';
-      return '<div style="display:flex; justify-content:space-between; padding: 10px 0; border-bottom: 1px solid var(--rule); flex-wrap:wrap; gap: 12px;"><div><div style="font-family:Playfair Display; font-size:18px; color:var(--masters-green-dark);">' + escapeHtml(course ? course.name : 'Course') + ' — ' + escapeHtml(r.date) + (r.label ? ' · ' + escapeHtml(r.label) : '') + '</div><div style="font-family:Inter; font-size:11px; color:#666; letter-spacing:.05em;">' + r.players.length + ' players · ' + escapeHtml(r.teeName) + ' · ' + (r.presses||[]).length + ' press(es)</div></div><div style="text-align:right;"><div style="font-family:Playfair Display; font-style:italic; color:var(--masters-gold); font-size:14px;">Top: ' + escapeHtml(topName||'—') + '</div><div style="font-family:Playfair Display; font-style:italic; color:var(--masters-green-dark); font-size:20px;">' + (top ? formatSkins(top[1]) + ' skins' : '') + '</div></div></div>';
+      const totSkins = Object.values(comp.perPlayer).reduce((s,v)=>s+v,0);
+      return '<div class="recap-entry"><div class="recap-head"><div><div style="font-family:Playfair Display; font-size:18px; color:var(--masters-green-dark);">' + escapeHtml(course ? course.name : 'Course') + ' — ' + escapeHtml(r.date) + (r.label ? ' · ' + escapeHtml(r.label) : '') + '</div><div style="font-family:Inter; font-size:11px; color:#666; letter-spacing:.05em;">' + r.players.length + ' players · ' + escapeHtml(r.teeName) + ' · ' + (r.presses||[]).length + ' press(es) · ' + formatSkins(totSkins) + ' skins (' + fmt$(totSkins * STATE.rules.skinValue) + ')</div></div><div style="text-align:right;"><div style="font-family:Playfair Display; font-style:italic; color:var(--masters-gold); font-size:14px;">Top: ' + escapeHtml(topName||'—') + '</div><div style="font-family:Playfair Display; font-style:italic; color:var(--masters-green-dark); font-size:20px;">' + (top ? formatSkins(top[1]) + ' skins' : '') + '</div></div></div>' + roundDetailTable(r) + '</div>';
     }).join('');
   }
 }
@@ -1334,7 +1427,18 @@ function renderNewRoundForm() {
   if (STATE.players.length === 0) {
     list.innerHTML = '<p style="font-style:italic; color:#777;">No players in roster.</p>';
   } else {
-    list.innerHTML = STATE.players.map(p => '<div style="display:grid; grid-template-columns: 24px 1fr 110px; gap:10px; align-items:center; margin-bottom: 8px; padding: 8px; background: white; border: 1px solid var(--rule); border-radius: 2px;"><input type="checkbox" class="round-player-cb" value="' + p.id + '" checked /><div><div style="font-family:Playfair Display; font-size: 18px; color: var(--masters-green-dark);">' + escapeHtml(p.name) + '</div><div style="font-family:Inter; font-size: 10px; color: #888;">Default: ' + (p.hcp != null ? p.hcp.toFixed(1) : '—') + '</div></div><input type="number" step="0.1" class="round-player-hcp" data-pid="' + p.id + '" placeholder="Today" value="' + (p.hcp != null ? p.hcp : '') + '" style="text-align:center; font-size:15px;" /></div>').join('');
+    // If handicaps were already entered for this date (an earlier round today), reuse them
+    // as the default so later rounds are pre-filled. Falls back to the player's index.
+    const dayKey = $('#newRoundDate') ? $('#newRoundDate').value : '';
+    const dayH = (STATE.dailyHandicaps && STATE.dailyHandicaps[dayKey]) || {};
+    list.innerHTML = STATE.players.map(p => {
+      const hasDay = dayH[p.id] != null;
+      const preset = hasDay ? dayH[p.id] : (p.hcp != null ? p.hcp : '');
+      const sub = hasDay
+        ? "Today's index: " + dayH[p.id] + (p.hcp != null ? ' · default ' + p.hcp.toFixed(1) : '')
+        : 'Default: ' + (p.hcp != null ? p.hcp.toFixed(1) : '—');
+      return '<div style="display:grid; grid-template-columns: 24px 1fr 110px; gap:10px; align-items:center; margin-bottom: 8px; padding: 8px; background: white; border: 1px solid var(--rule); border-radius: 2px;"><input type="checkbox" class="round-player-cb" value="' + p.id + '" checked /><div><div style="font-family:Playfair Display; font-size: 18px; color: var(--masters-green-dark);">' + escapeHtml(p.name) + '</div><div style="font-family:Inter; font-size: 10px; color: #888;">' + sub + '</div></div><input type="number" step="0.1" class="round-player-hcp" data-pid="' + p.id + '" placeholder="Today" value="' + preset + '" style="text-align:center; font-size:15px;" /></div>';
+    }).join('');
   }
 }
 
@@ -1879,6 +1983,11 @@ function startRound() {
     const raw = input.value.trim();
     handicapsForRound[pid] = raw === '' ? null : parseFloat(raw);
   });
+  // Remember today's entered handicaps so later rounds on the same date pre-fill with them.
+  STATE.dailyHandicaps = STATE.dailyHandicaps || {};
+  const dayStore = {};
+  Object.keys(handicapsForRound).forEach(pid => { if (handicapsForRound[pid] != null) dayStore[pid] = handicapsForRound[pid]; });
+  STATE.dailyHandicaps[date] = dayStore;
   const _startCourse = STATE.courses.find(c => c.id === courseId);
   STATE.activeRound = {
     id: uid(),
@@ -2079,9 +2188,7 @@ function renderRoundsHistory() {
     const course = courseForRound(r);
     const trip = STATE.trips.find(t => t.id === r.tripId);
     const total = Object.values(comp.perPlayer).reduce((s,v)=>s+v,0);
-    const standings = Object.entries(comp.perPlayer).sort((a,b)=>b[1]-a[1])
-      .map(([pid,v]) => escapeHtml((STATE.players.find(p=>p.id===pid)||{}).name || '?') + ': ' + formatSkins(v)).join(' · ');
-    return '<div class="round-history-item"><div class="info"><h4>' + escapeHtml(course ? course.name : 'Course') + ' — ' + escapeHtml(r.date) + (r.label ? ' · ' + escapeHtml(r.label) : '') + '</h4><p>' + (trip ? escapeHtml(trip.name) + ' · ' : '') + escapeHtml(r.teeName) + ' tees · ' + r.players.length + ' players · ' + (r.presses||[]).length + ' presses</p><p style="margin-top: 6px; font-size:14px; font-family:Cormorant Garamond; font-style:italic; color:#444; letter-spacing:0;">' + standings + '</p></div><div><div class="round-history-skins">' + formatSkins(total) + ' skins</div><div style="font-family:Inter; font-size:11px; color:#888; text-align:right; margin-top:4px;">' + fmt$(total * STATE.rules.skinValue) + '</div><div style="text-align:right; margin-top:8px; display:flex; gap:6px; justify-content:flex-end;"><button class="btn btn-ghost btn-sm" onclick="editRound(\'' + r.id + '\')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteRound(\'' + r.id + '\')">Remove</button></div></div></div>';
+    return '<div class="round-history-item rhi-detailed"><div class="rhi-top"><div class="info"><h4>' + escapeHtml(course ? course.name : 'Course') + ' — ' + escapeHtml(r.date) + (r.label ? ' · ' + escapeHtml(r.label) : '') + '</h4><p>' + (trip ? escapeHtml(trip.name) + ' · ' : '') + escapeHtml(r.teeName) + ' tees · ' + r.players.length + ' players · ' + (r.presses||[]).length + ' presses</p></div><div><div class="round-history-skins">' + formatSkins(total) + ' skins</div><div style="font-family:Inter; font-size:11px; color:#888; text-align:right; margin-top:4px;">' + fmt$(total * STATE.rules.skinValue) + '</div><div style="text-align:right; margin-top:8px; display:flex; gap:6px; justify-content:flex-end;"><button class="btn btn-ghost btn-sm" onclick="editRound(\'' + r.id + '\')">Edit</button><button class="btn btn-danger btn-sm" onclick="deleteRound(\'' + r.id + '\')">Remove</button></div></div></div><div class="rhi-detail">' + roundDetailTable(r) + '</div></div>';
   }).join('');
 }
 
@@ -2118,7 +2225,13 @@ function deleteRound(id) {
 function renderPlayers() {
   const grid = $('#playerRoster');
   if (STATE.players.length === 0) { grid.innerHTML = '<div class="empty-state">No players.</div>'; return; }
-  grid.innerHTML = STATE.players.map(p => '<div class="player-card"><div class="player-card-name">' + escapeHtml(p.name) + '</div><div class="player-card-detail">Default Index: ' + (p.hcp != null ? p.hcp.toFixed(1) : 'not set') + '</div><div class="player-card-detail">GHIN: ' + (p.ghin ? escapeHtml(p.ghin) : '—') + '</div><div class="player-card-actions"><button class="btn btn-ghost btn-sm" onclick="editPlayer(\'' + p.id + '\')">Edit</button><button class="btn btn-danger btn-sm" onclick="deletePlayer(\'' + p.id + '\')">Remove</button></div></div>').join('');
+  const career = allTimeSkinsMap();
+  const roundsFor = pid => STATE.rounds.filter(r => (r.players || []).includes(pid)).length;
+  grid.innerHTML = STATE.players.map(p => {
+    const skins = career[p.id] || 0;
+    const rp = roundsFor(p.id);
+    return '<div class="player-card"><div class="player-card-name">' + escapeHtml(p.name) + '</div><div class="player-card-detail">Default Index: ' + (p.hcp != null ? p.hcp.toFixed(1) : 'not set') + '</div><div class="player-card-detail">GHIN: ' + (p.ghin ? escapeHtml(p.ghin) : '—') + '</div><div class="player-card-career">Career Skins: <b>' + formatSkins(skins) + '</b> · ' + fmt$(skins * STATE.rules.skinValue) + '</div><div class="player-card-detail">' + rp + ' round' + (rp === 1 ? '' : 's') + ' played (all-time)</div><div class="player-card-actions"><button class="btn btn-ghost btn-sm" onclick="editPlayer(\'' + p.id + '\')">Edit</button><button class="btn btn-danger btn-sm" onclick="deletePlayer(\'' + p.id + '\')">Remove</button></div></div>';
+  }).join('');
 }
 
 function addPlayer() {
@@ -2399,6 +2512,8 @@ function switchPanel(name) {
   $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.panel === name));
   $$('.panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + name));
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  // Landing on Today's Round with a round in progress jumps straight to the current hole.
+  if (name === 'round' && STATE.activeRound) focusActiveRoundHole();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -2407,6 +2522,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#howToBtn').addEventListener('click', () => openModal('howToModal'));
   $('#startRoundBtn').addEventListener('click', startRound);
   $('#newRoundCourse').addEventListener('change', updateTeeOptions);
+  $('#newRoundDate').addEventListener('change', renderNewRoundForm);
   $('#newRoundTees').addEventListener('change', updateTeeInfo);
   $('#addPlayerBtn').addEventListener('click', addPlayer);
   $('#addCourseBtn').addEventListener('click', addCourse);
