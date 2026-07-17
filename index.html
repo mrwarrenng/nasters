@@ -1493,7 +1493,12 @@ function renderActiveRound() {
   renderStrokesGrid(r, course, comp);
   const container = $('#holesContainer');
   container.innerHTML = '';
-  for (let i = 0; i < 18; i++) container.appendChild(renderHoleCard(i, r, course, comp));
+  for (let i = 0; i < 18; i++) {
+    container.appendChild(renderHoleCard(i, r, course, comp));
+    // At the turn: drop a compact Front 9 scorecard right after the 9th hole so you can
+    // see the front-nine gross/net totals and who won it before starting the back.
+    if (i === 8) container.appendChild(renderNineCard(r, course, comp, 'front'));
+  }
   const playoffLen = (r.playoff && r.playoff.length) || 0;
   for (let i = 18; i < 18 + playoffLen; i++) container.appendChild(renderHoleCard(i, r, course, comp));
   // Extra-hole controls: offer a playoff hole whenever skins are still carrying, or
@@ -1750,6 +1755,65 @@ function renderTotalsCard(round, course, comp) {
     + '<div class="hole-card-body"><div class="strokes-grid-wrap"><table class="strokes-grid sc-table"><thead><tr>' + head + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
     + '<div class="totals-bonuses-label">Skins Earned · lowest net per segment</div><div class="totals-bonuses">' + bonusItems + '</div>'
     + '<div style="font-family:Inter; font-size:10px; letter-spacing:.06em; color:#999; margin-top:10px;">Each hole shows <b>gross</b>; a <b>/net</b> appears only where a stroke is given. <b>Out</b>/<b>In</b>/<b>Tot</b> subtotal each nine and the round; the <b>gold</b> subtotal is that segment&rsquo;s bonus winner (lowest net). “*” marks a nine still in progress.</div></div>';
+  return div;
+}
+
+// A compact single-nine scorecard shown at the turn (after hole 9). Same look as the full
+// Nine & Round Totals card but scoped to one nine — gross/net per hole, an Out/In subtotal
+// with the segment winner (lowest net) in gold, so you can see who took the nine.
+function renderNineCard(round, course, comp, which) {
+  const hr = comp.holeResults;
+  const players = round.players;
+  const isFront = which !== 'back';
+  const s = isFront ? 0 : 9, e = isFront ? 9 : 18;
+  const segKey = isFront ? 'front9' : 'back9';
+  const segLabel = isFront ? 'Front 9' : 'Back 9';
+  const subLabel = isFront ? 'Out' : 'In';
+  const bonusAmt = isFront ? STATE.rules.front9Bonus : STATE.rules.back9Bonus;
+  function holeScore(pid, i) {
+    const gv = (round.holes[i] && round.holes[i].scores) ? round.holes[i].scores[pid] : null;
+    if (gv == null || gv === '') return null;
+    const nv = hr[i].nets[pid];
+    return { gross: Number(gv), net: (nv == null ? Number(gv) : nv) };
+  }
+  function holeCell(pid, i) {
+    const c = holeScore(pid, i);
+    if (!c) return '<td></td>';
+    if (c.net < c.gross) return '<td class="has">' + c.gross + '<span class="sc-net">/' + c.net + '</span></td>';
+    return '<td>' + c.gross + '</td>';
+  }
+  function subCell(pid) {
+    let gross = 0, net = 0, entered = 0;
+    for (let i = s; i < e; i++) { const c = holeScore(pid, i); if (!c) continue; gross += c.gross; net += c.net; entered++; }
+    const isWin = (comp.bonuses[segKey] || []).includes(pid);
+    let inner;
+    if (entered === 0) inner = '—';
+    else { inner = net < gross ? (gross + '<span class="sc-net">/' + net + '</span>') : String(gross); if (entered < (e - s)) inner += ' <span class="sc-star">*</span>'; }
+    return '<td class="total' + (isWin ? ' win' : '') + '">' + inner + '</td>';
+  }
+  const div = document.createElement('div');
+  div.className = 'hole-card totals-card nine-card open';
+  let head = '<th class="pname">Player</th>';
+  for (let i = s + 1; i <= e; i++) head += '<th>' + i + '</th>';
+  head += '<th class="total">' + subLabel + '</th>';
+  const rows = players.map(pid => {
+    const p = STATE.players.find(x => x.id === pid);
+    let cells = '';
+    for (let i = s; i < e; i++) cells += holeCell(pid, i);
+    cells += subCell(pid);
+    return '<tr><th class="pname">' + escapeHtml(p ? p.name : '?') + '</th>' + cells + '</tr>';
+  }).join('');
+  const winners = comp.bonuses[segKey] || [];
+  let bonusLine;
+  if (!winners.length) {
+    bonusLine = '<span class="tb-pending">' + segLabel + ' still in progress</span>';
+  } else {
+    const names = winners.map(pid => escapeHtml((STATE.players.find(p => p.id === pid) || {}).name || '?')).join(', ');
+    bonusLine = '<b>' + names + '</b>' + (winners.length > 1 ? ' (split)' : '') + (bonusAmt > 0 ? ' · +' + formatSkins(bonusAmt) + ' skins' : '');
+  }
+  div.innerHTML = '<div class="totals-card-header"><h4>' + segLabel + ' at the Turn</h4><div class="meta">Gross / Net · read-only</div></div>'
+    + '<div class="hole-card-body"><div class="strokes-grid-wrap"><table class="strokes-grid sc-table"><thead><tr>' + head + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+    + '<div class="totals-bonuses" style="margin-top:12px;"><div class="tb-item"><span class="tb-seg">' + segLabel + ' Winner</span><span class="tb-val">' + bonusLine + '</span></div></div></div>';
   return div;
 }
 
