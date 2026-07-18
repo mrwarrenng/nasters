@@ -225,6 +225,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--m
 .rd-scorecard-btn .rd-flag-ic line { stroke: var(--masters-gold-bright); stroke-width: 2; stroke-linecap: round; }
 .rd-scorecard-btn .rd-flag-ic path { fill: var(--masters-gold-bright); }
 .rd-scorecard-btn .rd-flag-ic circle { fill: var(--masters-gold-bright); }
+.rd-push-note { margin-top: 12px; font-family: 'Inter', sans-serif; font-size: 11px; font-style: italic; color: var(--masters-gold); letter-spacing: 0.02em; text-align: center; }
 /* Per-player scorecard modal (par / gross / net by hole) */
 .psc-nine-label { font-family: 'Inter', sans-serif; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--masters-gold); margin: 12px 0 6px; }
 .psc-table { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; margin-bottom: 4px; }
@@ -1282,11 +1283,23 @@ function computeRoundSkins(round) {
     perPlayer[pid] = 0;
     breakdown[pid] = { holeSkins: 0, holesWon: 0, greenies: 0, greenieCount: 0, reverseGreenies: 0, front9: 0, back9: 0, round: 0 };
   });
+  // Attribute every completed hole in THIS round to a player. A hole won outright credits
+  // its winner; any preceding tied holes that carried into that win are credited to the same
+  // winner too — so holesWon across all players sums to 18 + playoff holes. Holes still
+  // carrying at the end are "pushed" to the next round (counted there, noted here).
+  let groupHoles = 0;   // completed this-round holes since the last outright win (the carry group)
   holeResults.forEach(r => {
-    if (r.winnerIds.length === 1) { perPlayer[r.winnerIds[0]] += r.totalValueAwarded; breakdown[r.winnerIds[0]].holeSkins += r.totalValueAwarded; breakdown[r.winnerIds[0]].holesWon += 1; }
+    if (r.completed) groupHoles += 1;
+    if (r.winnerIds.length === 1) {
+      perPlayer[r.winnerIds[0]] += r.totalValueAwarded;
+      breakdown[r.winnerIds[0]].holeSkins += r.totalValueAwarded;
+      breakdown[r.winnerIds[0]].holesWon += (groupHoles > 0 ? groupHoles : 1);
+      groupHoles = 0;
+    }
     if (r.greenieAwardedTo) { perPlayer[r.greenieAwardedTo] += r.greenieSkins; breakdown[r.greenieAwardedTo].greenies += r.greenieSkins; breakdown[r.greenieAwardedTo].greenieCount += 1; }
     if (r.reverseGreenieFor) r.reverseGreenieFor.forEach(pid => { perPlayer[pid] += r.reverseGreenieSkins; breakdown[pid].reverseGreenies += r.reverseGreenieSkins; });
   });
+  const pushedHoles = groupHoles;   // completed holes still carrying → pushed to the next round
   const bonuses = { front9: [], back9: [], round: [] };
   function netSum(pid, s, e) { let sum = 0; for (let i = s; i < e; i++) { if (holeResults[i].nets[pid] == null) return null; sum += holeResults[i].nets[pid]; } return sum; }
   function awardBonus(s, e, amt, key) {
@@ -1302,7 +1315,7 @@ function computeRoundSkins(round) {
   awardBonus(0, 9, STATE.rules.front9Bonus, 'front9');
   awardBonus(9, 18, STATE.rules.back9Bonus, 'back9');
   awardBonus(0, 18, STATE.rules.roundBonus, 'round');
-  return { perPlayer, breakdown, holeResults, bonuses, playerHcps, fullHcps };
+  return { perPlayer, breakdown, holeResults, bonuses, playerHcps, fullHcps, pushedHoles };
 }
 
 function aggregateStandings(filterFn) {
@@ -1459,7 +1472,11 @@ function roundDetailTable(round) {
       + '<button class="rd-scorecard-btn" type="button" onclick="showPlayerScorecard(\'' + round.id + '\',\'' + pid + '\')" aria-label="View ' + escapeHtml(p.name) + '’s scorecard">' + FLAGSTICK_SVG + '<span>View Scorecard</span></button>'
       + '</div>';
   }).join('');
-  return '<div class="rd-players">' + blocks + '</div>';
+  const pushed = comp.pushedHoles || 0;
+  const pushNote = pushed > 0
+    ? '<div class="rd-push-note">' + pushed + ' hole' + (pushed === 1 ? '' : 's') + ' pushed to the next round (unresolved carry).</div>'
+    : '';
+  return '<div class="rd-players">' + blocks + '</div>' + pushNote;
 }
 
 // All-time skins earned per player across every finalized round in the ledger.
